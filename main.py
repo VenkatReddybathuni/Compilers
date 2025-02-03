@@ -45,15 +45,15 @@ class Sequence(AST):
 
 @dataclass
 class Fun(AST):
-    n: str    # Name of function
-    a: str    # Parameter
-    b: AST    # Body
-    e: AST    # Expression where function is used
+    n: str   
+    a: str    
+    b: AST    
+    e: AST    
 
 @dataclass
 class Call(AST):
-    n: str    # Name of function
-    a: AST    # Argument
+    n: str    
+    a: AST    
 
 class Token:
     pass
@@ -78,10 +78,11 @@ class VarToken(Token):
 class StringToken(Token):
     v: str
 
+
 def lookup(env, v):
-    if isinstance(env, dict):  # Handle old dict format
+    if isinstance(env, dict):  
         return env[v]
-    for u, uv in reversed(env):
+    for u, uv in reversed(env):  
         if u == v:
             return uv
     raise ValueError(f"Variable {v} not found")
@@ -89,7 +90,7 @@ def lookup(env, v):
 def e(tree: AST, env=None) -> int | bool | str:
     if env is None:
         env = []
-    if isinstance(env, dict):  # Convert dict to list format
+    if isinstance(env, dict):  
         env = [(k, v) for k, v in env.items()]
 
     match tree:
@@ -154,15 +155,15 @@ def e(tree: AST, env=None) -> int | bool | str:
             env.append((name, e(expr, env)))
             return lookup(env, name)
         case Let(var, expr, body):
-            # Create a new scope
+            
             env.append((var, e(expr, env)))
             result = e(body, env)
-            env.pop()  # Clean up the scope
+            env.pop()  
             return result
 
 def lex(s: str) -> Iterator[Token]:
     i = 0
-    while i < len(s):  # Changed from while True
+    while i < len(s):  
         while i < len(s) and s[i].isspace():
             i += 1
 
@@ -176,7 +177,7 @@ def lex(s: str) -> Iterator[Token]:
                 t = t + s[i]
                 i = i + 1
             if t in {"and", "or", "let", "be", "in", "end", "if", "then", 
-                    "else", "while", "do", "fun", "is"}:  # Added fun, is
+                    "else", "while", "do", "fun", "is"}:  
                 yield KeywordToken(t)
             else:
                 yield VarToken(t)
@@ -200,11 +201,11 @@ def lex(s: str) -> Iterator[Token]:
                 raise ParseError("Unterminated string literal")
         else:
             match t := s[i]:
-                case '+' | '*' | '<' | '=' | '-' | '/' | '%' | '>' | '!' | '(' | ')' | ';':  # Added semicolon
+                case '+' | '*' | '<' | '=' | '-' | '/' | '%' | '>' | '!' | '(' | ')' | ';':  
                     i += 1
                     if i < len(s):
                         next_char = s[i]
-                        if (t + next_char) in {'**', '++', '<=', '>=', '==', '!='}:  # Check for two-char operators
+                        if (t + next_char) in {'**', '++', '<=', '>=', '==', '!='}: 
                             t += next_char
                             i += 1
                     yield OperatorToken(t)
@@ -340,14 +341,14 @@ def parse(s: str) -> AST:
                 param = next(t).v
                 expect(OperatorToken(")"))
                 expect(KeywordToken("is"))
-                body = parse_stmt()  # Changed from parse_expr() to parse_stmt()
+                body = parse_stmt() 
                 expect(KeywordToken("in"))
                 expr = parse_expr()
                 expect(KeywordToken("end"))
                 return Fun(name, param, body, expr)
             case VarToken(name):
                 next(t)
-                if t.peek(None) == OperatorToken("("):  # Function call
+                if t.peek(None) == OperatorToken("("):  #
                     next(t)
                     arg = parse_expr()
                     expect(OperatorToken(")"))

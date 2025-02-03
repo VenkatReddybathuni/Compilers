@@ -94,6 +94,73 @@ end
 * Variable lookup with reversed scope chain
 * Automatic scope cleanup
 
+## Environment Implementation
+
+The interpreter uses a list-based environment system for variable and function scoping:
+
+### Structure
+```python
+# Environment is a list of tuples: [(name, value), ...]
+env = [
+    ("x", 5),              # Variable binding
+    ("f", ("a", body)),    # Function binding: (param_name, function_body)
+]
+```
+
+### Key Operations
+
+1. **Variable Lookup**
+```python
+def lookup(env, v):
+    # Search from most recent binding (end of list)
+    for name, value in reversed(env):
+        if name == v:
+            return value
+    raise ValueError(f"Variable {v} not found")
+```
+
+2. **Scope Management**
+```python
+# Let binding creates new scope
+case Let(var, expr, body):
+    env.append((var, e(expr, env)))   # Add new binding
+    result = e(body, env)             # Evaluate in new scope
+    env.pop()                         # Clean up scope
+    return result
+
+# Function definition
+case Fun(name, param, body, expr):
+    env.append((name, (param, body))) # Store function
+    result = e(expr, env)            
+    env.pop()                         # Clean up
+    return result
+
+# Function call
+case Call(fname, arg):
+    param, body = lookup(env, fname)  # Get function
+    env.append((param, e(arg, env)))  # Bind parameter
+    result = e(body, env)            # Execute function
+    env.pop()                         # Clean up parameter
+    return result
+```
+
+### Scoping Example
+```python
+fun double(x) is x + x in  # Binds double -> ("x", body)
+    let y be 5 in          # Binds y -> 5
+        double(y)          # Creates temporary x -> 5 during call
+    end
+end
+
+# Environment evolution:
+[]                                  # Initial
+[("double", ("x", body))]          # After fun
+[("double", ...), ("y", 5)]        # After let
+[("double", ...), ("y", 5), ("x", 5)] # During function call
+[("double", ...), ("y", 5)]        # After function call
+[]                                 # Final
+```
+
 ### AST Node Types
 * `BinOp`: Binary operations
 * `Number`: Numeric literals
