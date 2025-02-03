@@ -1,94 +1,142 @@
-# Compilers
-# Simple Expression Language Compiler
-
-A compiler implementation for a simple expression language that supports arithmetic operations, logical operations, conditionals, variable assignments, and let expressions.
+# Simple Programming Language Interpreter
 
 ## Features
 
-### Supported Operations
-- Arithmetic: `+`, `-`, `*`, `/`, `**` (power), `%` (modulo)
-- String: `++` (concatenation)
-- Comparison: `<`, `>`, `<=`, `>=`, `==`, `!=`
-- Logical: `and`, `or`
-- Control Flow: `if-then-else`
-- Variable Management: `let` expressions, assignments
+* Basic Operations
+  * Arithmetic: `+`, `-`, `*`, `/`, `%`, `**` (power)
+  * String: `++` (concatenation)
+  * Comparison: `<`, `>`, `<=`, `>=`, `==`, `!=`
+  * Logical: `and`, `or`
 
-### Language Constructs
+* Control Structures
+  * If-then-else expressions
+  * Function definitions and calls
+  * Let expressions for scoping
+  * Multi-statement blocks with semicolons
 
-1. **Basic Expressions**
-   - Numbers: `123`, `456`
-   - Strings: `"Hello World"`
-   - Variables: `x`, `y`
+* Environment Handling
+  * Lexical scoping
+  * Function scope
+  * Variable assignments
+  * Recursive functions
 
-2. **Compound Expressions**
-   ```
-   2 + 3 * 4
-   "Hello" ++ " World"
-   x >= 10 and y <= 20
-   ```
+## Syntax Examples
 
-3. **Conditional Statements**
-   ```
-   if x > 10 then x + y else x - y end
-   ```
+### Basic Operations
+```
+# Arithmetic
+2 + 3 * 4       # 14
+2 ** 3          # 8 (power)
+17 % 5          # 2 (modulo)
 
-4. **Let Expressions**
-   ```
-   let x be 5 in
-     let y be x * 2 in
-       x + y
-     end
-   end
-   ```
+# Strings
+"Hello" ++ " World"  # "Hello World"
+
+# Comparisons and Logic
+x > y and z < 10
+a >= 5 or b <= 3
+```
+
+### Control Flow
+```
+# If expression
+if x > 10 then
+    x + y
+else
+    x - y
+end
+
+# Let binding
+let x be 5 in
+    let y be x * 2 in
+        x + y    # Returns 15
+    end
+end
+```
+
+### Functions
+```
+# Simple function
+fun double(x) is x + x in
+    double(5)    # Returns 10
+end
+
+# Recursive function
+fun factorial(n) is
+    if n <= 1 then 1
+    else n * factorial(n - 1)
+    end
+in
+    factorial(5)  # Returns 120
+end
+
+# Nested function calls
+fun inc(x) is x + 1 in
+    inc(inc(5))  # Returns 7
+end
+```
+
+### Multiple Statements
+```
+let sum be 0 in
+    let i be 1 in
+        sum = sum + i;
+        i = i + 1
+    end
+end
+```
 
 ## Implementation Details
 
-The compiler is implemented in Python and consists of three main components:
-
-1. **Lexer**: Converts source code into tokens
-2. **Parser**: Builds an Abstract Syntax Tree (AST) from tokens
-3. **Evaluator**: Interprets the AST and executes the program
+### Environment
+* List-based environment for proper function scoping
+* Support for nested scopes
+* Variable lookup with reversed scope chain
+* Automatic scope cleanup
 
 ### AST Node Types
-- `BinOp`: Binary operations
-- `Number`: Numeric literals
-- `String`: String literals
-- `If`: Conditional expressions
-- `Var`: Variable references
-- `Assign`: Variable assignments
-- `Let`: Let expressions
-- `Sequence`: Multiple statements
+* `BinOp`: Binary operations
+* `Number`: Numeric literals
+* `String`: String literals
+* `If`: Conditional expressions
+* `Var`: Variable references
+* `Assign`: Variable assignments
+* `Let`: Let expressions
+* `Fun`: Function definitions
+* `Call`: Function calls
+* `Sequence`: Multiple statements
 
-## Usage Example
+### Error Handling
+* Syntax errors
+* Undefined variables
+* Invalid function calls
+* Missing parameters
+* Unterminated strings
+* Type mismatches
 
+## Running Tests
 ```python
-# Initialize environment with variables
-env = {"x": 15, "y": 10}
-
-# Parse and evaluate expressions
-expr = 'if x >= 10 and y <= 20 then x + y else x - y end'
-result = e(parse(expr), env)
-print(result)  # Output: 25
-
-# Let expression
-expr = 'let a be 3 in let b be a + 2 in a + b end end'
-result = e(parse(expr))
-print(result)  # Output: 8
+# Function tests
+fun double(x) is x + x in double(5) end         # Returns 10
+fun square(x) is x * x in square(4) end         # Returns 16
+fun inc(x) is x + 1 in inc(inc(5)) end         # Returns 7
+fun factorial(n) is                             # Returns 120
+    if n <= 1 then 1
+    else n * factorial(n - 1)
+    end
+in
+    factorial(5)
+end
 ```
 
-## Error Handling
-
-The compiler includes basic error handling for:
-- Syntax errors
-- Unterminated strings
-- Invalid expressions
-- Missing tokens
-
 ## Project Structure
-
 ```
 compiler/
 │
-├── main.py         # Main implementation
+├── main.py         # Core implementation
+│   ├── Lexer
+│   ├── Parser
+│   └── Evaluator
+│
 └── README.md       # Documentation
 ```

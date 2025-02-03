@@ -43,6 +43,18 @@ class Let(AST):
 class Sequence(AST):
     statements: list[AST]
 
+@dataclass
+class Fun(AST):
+    n: str    # Name of function
+    a: str    # Parameter
+    b: AST    # Body
+    e: AST    # Expression where function is used
+
+@dataclass
+class Call(AST):
+    n: str    # Name of function
+    a: AST    # Argument
+
 class Token:
     pass
 
@@ -66,13 +78,36 @@ class VarToken(Token):
 class StringToken(Token):
     v: str
 
+def lookup(env, v):
+    if isinstance(env, dict):  # Handle old dict format
+        return env[v]
+    for u, uv in reversed(env):
+        if u == v:
+            return uv
+    raise ValueError(f"Variable {v} not found")
+
 def e(tree: AST, env=None) -> int | bool | str:
     if env is None:
-        env = {}
+        env = []
+    if isinstance(env, dict):  # Convert dict to list format
+        env = [(k, v) for k, v in env.items()]
 
     match tree:
         case Number(v):
             return int(v)
+        case Var(v):
+            return lookup(env, v)
+        case Fun(f, a, b, c):
+            env.append((f, (a, b)))
+            x = e(c, env)
+            env.pop()
+            return x
+        case Call(f, x):
+            a, b = lookup(env, f)
+            env.append((a, e(x, env)))
+            y = e(b, env)
+            env.pop()
+            return y
         case BinOp("+", l, r):
             return e(l, env) + e(r, env)
         case BinOp("-", l, r):
@@ -115,17 +150,15 @@ def e(tree: AST, env=None) -> int | bool | str:
             for stmt in statements:
                 result = e(stmt, env)
             return result
-        case Var(name):
-            return env[name]
         case Assign(name, expr):
-            env[name] = e(expr, env)
-            return env[name]
+            env.append((name, e(expr, env)))
+            return lookup(env, name)
         case Let(var, expr, body):
             # Create a new scope
-            new_env = env.copy()
-            new_env[var] = e(expr, env)
-            return e(body, new_env)
-
+            env.append((var, e(expr, env)))
+            result = e(body, env)
+            env.pop()  # Clean up the scope
+            return result
 
 def lex(s: str) -> Iterator[Token]:
     i = 0
@@ -142,7 +175,8 @@ def lex(s: str) -> Iterator[Token]:
             while i < len(s) and s[i].isalpha():
                 t = t + s[i]
                 i = i + 1
-            if t in {"and", "or", "let", "be", "in", "end", "if", "then", "else", "while", "do"}: 
+            if t in {"and", "or", "let", "be", "in", "end", "if", "then", 
+                    "else", "while", "do", "fun", "is"}:  # Added fun, is
                 yield KeywordToken(t)
             else:
                 yield VarToken(t)
@@ -295,6 +329,30 @@ def parse(s: str) -> AST:
 
     def parse_atom():
         match t.peek(None):
+            case KeywordToken("fun"):
+                next(t)
+                if not isinstance(t.peek(None), VarToken):
+                    raise ParseError("Expected function name")
+                name = next(t).v
+                expect(OperatorToken("("))
+                if not isinstance(t.peek(None), VarToken):
+                    raise ParseError("Expected parameter name")
+                param = next(t).v
+                expect(OperatorToken(")"))
+                expect(KeywordToken("is"))
+                body = parse_stmt()  # Changed from parse_expr() to parse_stmt()
+                expect(KeywordToken("in"))
+                expr = parse_expr()
+                expect(KeywordToken("end"))
+                return Fun(name, param, body, expr)
+            case VarToken(name):
+                next(t)
+                if t.peek(None) == OperatorToken("("):  # Function call
+                    next(t)
+                    arg = parse_expr()
+                    expect(OperatorToken(")"))
+                    return Call(name, arg)
+                return Var(name)
             case OperatorToken('('):
                 next(t)
                 expr = parse_expr()  
@@ -305,9 +363,6 @@ def parse(s: str) -> AST:
             case NumberToken(v):
                 next(t)
                 return Number(v)
-            case VarToken(v):
-                next(t)
-                return Var(v)
             case StringToken(v):
                 next(t)
                 return String(v)
@@ -344,7 +399,7 @@ test_cases = [
 ]
 
 # Run test cases
-test_env = {"x": 15, "y": 10}  # Set up environment with test variables
+test_env = [("x", 15), ("y", 10)]  # Changed from dict to list format
 print("\nRunning test cases:")
 for test in test_cases:
     try:
@@ -358,7 +413,7 @@ for test in test_cases:
 
 # Test specifically for the if condition
 print("\nTesting if condition:")
-test_env = {"x": 15, "y": 10}
+test_env = [("x", 15), ("y", 10)]
 test = 'if ((x == 15) and y < 20) then (x + y)*y else (x - y) end'
 result = e(parse(test), test_env)
 print(f"Test: {test}")
@@ -366,7 +421,7 @@ print(f"Result: {result}")  # Should print 25 (15 + 10)
 
 # Add a test case to verify the fix
 print("\nTesting comparison operators:")
-test_env = {"x": 15, "y": 10}
+test_env = [("x", 15), ("y", 10)]
 comparison_tests = [
     'x > 10',  # Should be True
     'if x > 10 then x + y else x - y end',  # Should be 25
@@ -404,4 +459,31 @@ for test in let_tests:
         print("-" * 30)
     except Exception as err:
         print(f"Error in test '{test}': {err}")
+        print("-" * 30)
+
+# Add these test cases at the end:
+function_tests = [
+    "fun double(x) is x + x in double(5) end",
+    "fun square(x) is x * x in square(4) end",
+    "fun inc(x) is x + 1 in inc(inc(5)) end",
+    """fun factorial(n) is 
+         if n <= 1 then 1 else n * factorial(n - 1) end 
+       in factorial(5) end""",  # Simplified to single line for better parsing
+    # More test cases
+    """fun fib(n) is
+         if n <= 1 then n
+         else fib(n-1) + fib(n-2)
+         end
+       in fib(6) end"""
+]
+
+print("\nTesting functions:")
+for test in function_tests:
+    try:
+        result = e(parse(test))
+        print(f"Test: {test}")
+        print(f"Result: {result}")
+        print("-" * 30)
+    except Exception as err:
+        print(f"Error in test: {err}")
         print("-" * 30)
