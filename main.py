@@ -45,10 +45,12 @@ class Sequence(AST):
 
 @dataclass
 class Fun(AST):
-    n: str   
-    a: str    
-    b: AST    
-    e: AST    
+    n: str       # name
+    a: str       # argument name
+    at: str      # argument type
+    rt: str      # return type
+    b: AST       # body
+    e: AST       # expression
 
 @dataclass
 class Call(AST):
@@ -56,16 +58,28 @@ class Call(AST):
     a: AST    
 
 @dataclass
+class PrintLn(AST):
+    expr: AST
+
+@dataclass
+class Return(AST):
+    expr: AST
+
+@dataclass
+class StrConversion(AST):
+    expr: AST
+
+@dataclass
 class While(AST):
     cond: AST
     body: AST
 
 @dataclass
-class Break(AST):
+class Continue(AST):
     pass
 
 @dataclass
-class Continue(AST):
+class Break(AST):
     pass
 
 class Token:
@@ -91,37 +105,95 @@ class VarToken(Token):
 class StringToken(Token):
     v: str
 
+@dataclass
+class TypeToken(Token):
+    t: str
+
+class ReturnValue(Exception):
+    def __init__(self, value):
+        self.value = value
+
+class TypeError(Exception):
+    pass
+
+class LoopControl(Exception):
+    pass
+
+class ContinueLoop(LoopControl):
+    pass
+
+class BreakLoop(LoopControl):
+    pass
+
+def check_concat_types(left, right):
+    """Stricter type checking for string concatenation"""
+    if not isinstance(left, str) or not isinstance(right, str):
+        raise TypeError(f"String concatenation requires string operands, got {type(left).__name__} and {type(right).__name__}")
+    return left + right
+
+def convert_to_string(value, context=""):
+    """Explicit string conversion with type checking"""
+    if isinstance(value, (int, str)):
+        return str(value)
+    raise TypeError(f"{context}Cannot convert {type(value).__name__} to string")
+
+def check_type(value, expected_type):
+    if expected_type == "int":
+        if not isinstance(value, int):
+            raise TypeError(f"Type mismatch: expected int but got {type(value).__name__}")
+    elif expected_type == "string":
+        if not isinstance(value, str):
+            raise TypeError(f"Type mismatch: expected string but got {type(value).__name__}")
+    elif expected_type == "bool":
+        if not isinstance(value, bool):
+            raise TypeError(f"Type mismatch: expected bool but got {type(value).__name__}")
+    return value
 
 def lookup(env, v):
-    if isinstance(env, dict):  
-        return env[v]
-    for u, uv in reversed(env):  
+    for u, uv in reversed(env):
         if u == v:
             return uv
     raise ValueError(f"Variable {v} not found")
 
 def e(tree: AST, env=None) -> int | bool | str:
     if env is None:
-        env = []
-    if isinstance(env, dict):  
-        env = [(k, v) for k, v in env.items()]
+        env = []  # Empty list for environment
 
     match tree:
+        case PrintLn(expr):
+            result = e(expr, env)
+            print(result)
+            return result
         case Number(v):
             return int(v)
         case Var(v):
             return lookup(env, v)
-        case Fun(f, a, b, c):
-            env.append((f, (a, b)))
-            x = e(c, env)
-            env.pop()
-            return x
+        case Fun(f, a, at, rt, b, c):
+            # Store function definition with its type information
+            env.append((f, (a, at, b, rt)))  # Store param name, param type, body, return type
+            return e(c, env)
         case Call(f, x):
-            a, b = lookup(env, f)
-            env.append((a, e(x, env)))
-            y = e(b, env)
-            env.pop()
-            return y
+            param, param_type, body, return_type = lookup(env, f)  # Get function definition with types
+            arg_value = e(x, env)
+            
+            # Add explicit conversion for string parameters if needed
+            if param_type == "string" and isinstance(arg_value, int):
+                arg_value = str(arg_value)
+            elif param_type == "int" and isinstance(arg_value, str):
+                raise TypeError(f"Function '{f}' expects int but got string")
+                
+            try:
+                check_type(arg_value, param_type)
+            except TypeError as te:
+                raise TypeError(f"Function '{f}' parameter type mismatch: {str(te)}")
+                
+            call_env = env.copy()
+            call_env.append((param, arg_value))
+            try:
+                result = e(body, call_env)
+                return check_type(result, return_type)
+            except ReturnValue as rv:
+                return check_type(rv.value, return_type)
         case BinOp("+", l, r):
             return e(l, env) + e(r, env)
         case BinOp("-", l, r):
@@ -151,7 +223,14 @@ def e(tree: AST, env=None) -> int | bool | str:
         case String(v):
             return v
         case BinOp("++", l, r):  
-            return str(e(l, env)) + str(e(r, env))
+            left_val = e(l, env)
+            right_val = e(r, env)
+            
+            # No automatic conversion - both must be strings
+            if not isinstance(left_val, str) or not isinstance(right_val, str):
+                raise TypeError(f"Cannot concatenate {type(left_val).__name__} with {type(right_val).__name__}. Use str() for explicit conversion")
+            
+            return left_val + right_val
         case BinOp(">", l, r):
             return e(l, env) > e(r, env)
         case If(cond, then, else_):
@@ -159,19 +238,6 @@ def e(tree: AST, env=None) -> int | bool | str:
                 return e(then, env)
             else:
                 return e(else_, env)
-        case While(cond, body):
-                while e(cond, env):
-                    try:
-                        result = e(body, env)
-                    except Break:
-                        return None  # Exiting the loop on Break
-                    except Continue:
-                        continue  # Continuing the loop on Continue
-                return None
-        case Break():
-                raise Break()  # Raise an exception to break the loop
-        case Continue():
-                raise Continue() 
         case Sequence(statements):
             result = None
             for stmt in statements:
@@ -181,11 +247,30 @@ def e(tree: AST, env=None) -> int | bool | str:
             env.append((name, e(expr, env)))
             return lookup(env, name)
         case Let(var, expr, body):
-            
-            env.append((var, e(expr, env)))
-            result = e(body, env)
-            env.pop()  
-            return result
+            value = e(expr, env)  # Evaluate the expression first
+            new_env = env.copy()
+            new_env.append((var, value))  # Bind variable to its value
+            result = e(body, new_env)  # Evaluate the body with new binding
+            return result  # Return the body's result
+        case Return(expr):
+            result = e(expr, env)
+            raise ReturnValue(result)
+        case StrConversion(expr):
+            val = e(expr, env)
+            return str(val)
+        case While(cond, body):
+            while e(cond, env):
+                try:
+                    e(body, env)
+                except ContinueLoop:
+                    continue
+                except BreakLoop:
+                    break
+            return None
+        case Continue():
+            raise ContinueLoop()
+        case Break():
+            raise BreakLoop()
 
 def lex(s: str) -> Iterator[Token]:
     i = 0
@@ -199,12 +284,13 @@ def lex(s: str) -> Iterator[Token]:
         if s[i].isalpha():
             t = s[i]
             i = i + 1
-            while i < len(s) and s[i].isalpha():
+            while i < len(s) and (s[i].isalpha() or s[i].isdigit()):  # Allow digits in identifiers
                 t = t + s[i]
                 i = i + 1
-            if t in {"and", "or", "let", "be", "in", "end", "if", "then", 
-                    "else", "while", "do", "fun", "is", "continue", "break"}:  
+            if t in {"and", "or", "if", "else", "fun", "return", "println", "str", "while", "continue", "break"}:  # Added while, continue, break
                 yield KeywordToken(t)
+            elif t in {"int", "float", "string", "void", "bool"}:  # Types are now handled separately
+                yield TypeToken(t)
             else:
                 yield VarToken(t)
         elif s[i].isdigit():
@@ -227,7 +313,7 @@ def lex(s: str) -> Iterator[Token]:
                 raise ParseError("Unterminated string literal")
         else:
             match t := s[i]:
-                case '+' | '*' | '<' | '=' | '-' | '/' | '%' | '>' | '!' | '(' | ')' | ';':  
+                case '+' | '*' | '<' | '=' | '-' | '/' | '%' | '>' | '!' | '(' | ')' | ';' | '{' | '}' | ':':  # Added colon
                     i += 1
                     if i < len(s):
                         next_char = s[i]
@@ -252,43 +338,111 @@ def parse(s: str) -> AST:
     def parse_statements():
         statements = []
         while t.peek(None) is not None:
+            if isinstance(t.peek(), OperatorToken) and t.peek().o == '}':
+                break
+                
             stmt = parse_stmt()
             statements.append(stmt)
             
-            # Skip semicolons
-            while t.peek(None) is not None and isinstance(t.peek(), OperatorToken) and t.peek().o == ';':
+            # Handle semicolons more carefully
+            if isinstance(t.peek(None), OperatorToken) and t.peek().o == ';':
                 next(t)
                 
-            # Break if we hit end of statement or certain keywords
-            if t.peek(None) is None or (isinstance(t.peek(), KeywordToken) and t.peek().w in {'end', 'else'}):
-                break
-                
-        return Sequence(statements) if len(statements) > 1 else statements[0]
+        # Always return a Sequence for multiple statements
+        if len(statements) > 1:
+            return Sequence(statements)
+        elif len(statements) == 1:
+            return statements[0]
+        else:
+            return Number("0")  # Empty block returns 0
 
     def parse_stmt():
         match t.peek(None):
+            case TypeToken(typ):
+                next(t)  # consume type token
+                if not isinstance(t.peek(None), VarToken):
+                    raise ParseError(f"Expected variable name after {typ}")
+                var = next(t).v
+                expect(OperatorToken("="))
+                expr = parse_expr()
+                expect(OperatorToken(";"))
+                next_stmt = parse_statements() if t.peek(None) is not None else None
+                return Let(var, expr, next_stmt if next_stmt else Var(var))
+            case KeywordToken("fun"):
+                next(t)
+                if not isinstance(t.peek(None), VarToken):
+                    raise ParseError("Expected function name")
+                name = next(t).v
+                expect(OperatorToken("("))
+                
+                # Parse parameter name
+                if not isinstance(t.peek(None), VarToken):
+                    raise ParseError("Expected parameter name")
+                param = next(t).v
+                
+                # Parse parameter type
+                expect(OperatorToken(":"))
+                if not isinstance(t.peek(None), TypeToken):
+                    raise ParseError("Expected parameter type")
+                param_type = next(t).t
+                
+                expect(OperatorToken(")"))
+                
+                # Handle return type
+                expect(OperatorToken(":"))
+                if not isinstance(t.peek(None), TypeToken):
+                    raise ParseError("Expected return type")
+                return_type = next(t).t
+                
+                expect(OperatorToken("{"))
+                body = parse_statements()
+                expect(OperatorToken("}"))
+                # Continue parsing after function definition
+                rest = parse_statements() if t.peek(None) is not None else body
+                return Fun(name, param, param_type, return_type, body, rest)
             case KeywordToken("if"):
                 next(t)
+                expect(OperatorToken("("))  # Expect opening parenthesis
                 cond = parse_expr()
-                expect(KeywordToken("then"))
-                then = parse_stmt() 
-                expect(KeywordToken("else"))
-                else_ = parse_stmt()  
-                expect(KeywordToken("end"))
+                expect(OperatorToken(")"))  # Expect closing parenthesis
+                expect(OperatorToken("{"))  # Expect opening brace
+                then = parse_statements()   # Parse statements inside braces
+                expect(OperatorToken("}"))  # Expect closing brace
+                
+                if t.peek(None) == KeywordToken("else"):
+                    next(t)
+                    expect(OperatorToken("{"))
+                    else_ = parse_statements()
+                    expect(OperatorToken("}"))
+                else:
+                    else_ = Number("0")  # Default else case
+                    
                 return If(cond, then, else_)
+            case KeywordToken("return"):
+                next(t)
+                expr = parse_expr()
+                if t.peek(None) == OperatorToken(";"):
+                    next(t)
+                return Return(expr)
             case KeywordToken("while"):
                 next(t)
+                expect(OperatorToken("("))  # Expect opening parenthesis
                 cond = parse_expr()
-                expect(KeywordToken("do"))
-                body = parse_statements()
-                expect(KeywordToken("end"))
+                expect(OperatorToken(")"))  # Expect closing parenthesis
+                expect(OperatorToken("{"))  # Expect opening brace
+                body = parse_statements()   # Parse statements inside braces
+                expect(OperatorToken("}"))  # Expect closing brace
                 return While(cond, body)
-            case KeywordToken("break"):
-                next(t)
-                return Break()
             case KeywordToken("continue"):
                 next(t)
+                if t.peek(None) == OperatorToken(";"):
+                    next(t)
                 return Continue()
+            case KeywordToken("break"):
+                next(t)
+                if t.peek(None) == OperatorToken(";"):
+                    next(t)
+                return Break()
             case _:
                 return parse_expr()
 
@@ -369,28 +523,59 @@ def parse(s: str) -> AST:
 
     def parse_atom():
         match t.peek(None):
-            case KeywordToken("fun"):
+            case OperatorToken('{'):
+                next(t)  # consume opening brace
+                expr = parse_statements()
+                expect(OperatorToken("}"))  # expect closing brace
+                return expr
+            case TypeToken(typ):  # Changed from KeywordToken to TypeToken
                 next(t)
                 if not isinstance(t.peek(None), VarToken):
-                    raise ParseError("Expected function name")
-                name = next(t).v
-                expect(OperatorToken("("))
-                if not isinstance(t.peek(None), VarToken):
-                    raise ParseError("Expected parameter name")
-                param = next(t).v
-                expect(OperatorToken(")"))
-                expect(KeywordToken("is"))
-                body = parse_stmt() 
-                expect(KeywordToken("in"))
+                    raise ParseError(f"Expected variable name after {typ}")
+                var = next(t).v
+                expect(OperatorToken("="))
                 expr = parse_expr()
-                expect(KeywordToken("end"))
-                return Fun(name, param, body, expr)
+                expect(OperatorToken(";"))
+                # Create a sequence that continues evaluating after the declaration
+                next_expr = parse_statements() if t.peek(None) is not None else Var(var)
+                return Let(var, expr, next_expr)
+            case KeywordToken("println"):
+                next(t)
+                expect(OperatorToken("("))
+                expr = parse_expr()
+                expect(OperatorToken(")"))
+                if t.peek(None) == OperatorToken(";"):
+                    next(t)
+                return PrintLn(expr)
+            case KeywordToken("str"):
+                next(t)
+                expect(OperatorToken("("))
+                expr = parse_expr()
+                expect(OperatorToken(")"))
+                return StrConversion(expr)
             case VarToken(name):
                 next(t)
-                if t.peek(None) == OperatorToken("("):  #
+                if t.peek(None) == OperatorToken("="):
+                    next(t)
+                    # Handle function call on the right side of assignment
+                    if isinstance(t.peek(None), VarToken):
+                        func_name = next(t).v
+                        if t.peek(None) == OperatorToken("("):
+                            next(t)
+                            arg = parse_expr()
+                            expect(OperatorToken(")"))
+                            expect(OperatorToken(";"))
+                            return Let(name, Call(func_name, arg), Var(name))
+                    # Handle normal expression assignment
+                    expr = parse_expr()
+                    expect(OperatorToken(";"))
+                    return Let(name, expr, Var(name))
+                elif t.peek(None) == OperatorToken("("):
                     next(t)
                     arg = parse_expr()
                     expect(OperatorToken(")"))
+                    if t.peek(None) == OperatorToken(";"):
+                        next(t)
                     return Call(name, arg)
                 return Var(name)
             case OperatorToken('('):
@@ -406,148 +591,11 @@ def parse(s: str) -> AST:
             case StringToken(v):
                 next(t)
                 return String(v)
-            case KeywordToken("let"):
-                next(t)
-                if not isinstance(t.peek(None), VarToken):
-                    raise ParseError("Expected variable name after 'let'")
-                var = next(t).v
-                expect(KeywordToken("be"))
-                expr = parse_expr()
-                expect(KeywordToken("in"))
-                body = parse_stmt()  
-                expect(KeywordToken("end"))
-                return Let(var, expr, body)
             case _:
                 raise ParseError(f"Unexpected token: {t.peek(None)}")
 
     return parse_stmt()  
 
-
-# # Example usage:
-# test_cases = [
-#     'if x >= 10 and y <= 20 then x + y else x - y end',
-#     '2 ** 3',  # Power operation
-#     '17 % 5',  # Modulo operation
-#     '"Hello" ++ " World"',  # String concatenation
-#     'x == y',  # Equality comparison
-#     'x != y',  # Inequality comparison
-#     '(2 + 3) * 4',  # Should evaluate to 20
-#     '2 + (3 * 4)',  # Should evaluate to 14
-#     'if (x > 10) then (x + y) else (x - y) end',
-#     '(2 ** 3) + 1',  # Should evaluate to 9
-#     '((2 + 3) * (4 + 5))',  # Should evaluate to 45
-# ]
-
-# # Run test cases
-# test_env = [("x", 15), ("y", 10)]  # Changed from dict to list format
-# print("\nRunning test cases:")
-# for test in test_cases:
-#     try:
-#         result = e(parse(test), test_env)
-#         print(f"Test: {test}")
-#         print(f"Result: {result}")
-#         print("-" * 30)
-#     except Exception as err:
-#         print(f"Error in test '{test}': {err}")
-#         print("-" * 30)
-
-# # Test specifically for the if condition
-# print("\nTesting if condition:")
-# test_env = [("x", 15), ("y", 10)]
-# test = 'if ((x == 15) and y < 20) then (x + y)*y else (x - y) end'
-# result = e(parse(test), test_env)
-# print(f"Test: {test}")
-# print(f"Result: {result}")  # Should print 25 (15 + 10)
-
-# # Add a test case to verify the fix
-# print("\nTesting comparison operators:")
-# test_env = [("x", 15), ("y", 10)]
-# comparison_tests = [
-#     'x > 10',  # Should be True
-#     'if x > 10 then x + y else x - y end',  # Should be 25
-#     'x >= 15',  # Should be True
-#     'y < x',  # Should be True
-# ]
-
-# for test in comparison_tests:
-#     try:
-#         result = e(parse(test), test_env)
-#         print(f"Test: {test}")
-#         print(f"Result: {result}")
-#         print("-" * 30)
-#     except Exception as err:
-#         print(f"Error in test '{test}': {err}")
-#         print("-" * 30)
-
-# # Update test cases
-# let_tests = [
-#     "let a be 3 in a + a end",  # Should be 6
-#     "let a be 3 in let b be a + 2 in a + b end end",  # Should be 8
-#     "let x be 5 in let y be x * 2 in x + y end end",  # Should be 15
-#     "let x be (2*5) in let y be (x + 3) in x + y end end",  # Should be 23
-#     "let a be 3 in if a == 3 then 1+1 else 2+2 end end",  # Should now work
-#     "let x be 10 in if x > 5 then x + 2 else x - 2 end end"  # Additional test
-# ]
-
-
-# print("\nTesting let expressions:")
-# for test in let_tests:
-#     try:
-#         result = e(parse(test))
-#         print(f"Test: {test}")
-#         print(f"Result: {result}")
-#         print("-" * 30)
-#     except Exception as err:
-#         print(f"Error in test '{test}': {err}")
-#         print("-" * 30)
-
-# # Add these test cases at the end:
-# function_tests = [
-#     "fun double(x) is x + x in double(5) end",
-#     "fun square(x) is x * x in square(4) end",
-#     "fun inc(x) is x + 1 in inc(inc(5)) end",
-#     """fun factorial(n) is 
-#          if n <= 1 then 1 else n * factorial(n - 1) end 
-#        in factorial(5) end""",  # Simplified to single line for better parsing
-#     # More test cases
-#     """fun fib(n) is
-#          if n <= 1 then n
-#          else fib(n-1) + fib(n-2)
-#          end
-#        in fib(6) end"""
-# ]
-
-# print("\nTesting functions:")
-# for test in function_tests:
-#     try:
-#         result = e(parse(test))
-#         print(f"Test: {test}")
-#         print(f"Result: {result}")
-#         print("-" * 30)
-#     except Exception as err:
-#         print(f"Error in test: {err}")
-#         print("-" * 30)
-
-# # program = """
-# # let x be 5 in
-# # while x < 10 do
-# #   if x == 5 then 
-# #     break 
-# #   else
-# #     let x be x in x+1 end
-# #   end
-# # end
-# # end
-# # """
-
-code = """
-while x < 5 do
-    x = x + 1
-end
-let x be x+2 in if x > 5 then x + 2 else x - 2 end end
-"""
-
-
-test_env = [("x", 1)]
-
-print(e(parse(code),test_env))  # Should print 5
+if __name__ == "__main__":
+    from tests import run_tests
+    run_tests()

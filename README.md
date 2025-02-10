@@ -1,199 +1,340 @@
-# Simple Programming Language Interpreter
+# Typed Programming Language Implementation
 
-## Features
-
-* Basic Operations
-  * Arithmetic: `+`, `-`, `*`, `/`, `%`, `**` (power)
-  * String: `++` (concatenation)
-  * Comparison: `<`, `>`, `<=`, `>=`, `==`, `!=`
-  * Logical: `and`, `or`
-
-* Control Structures
-  * If-then-else expressions
-  * Function definitions and calls
-  * Let expressions for scoping
-  * Multi-statement blocks with semicolons
-
-* Environment Handling
-  * Lexical scoping
-  * Function scope
-  * Variable assignments
-  * Recursive functions
-
-## Syntax Examples
-
-### Basic Operations
-```
-# Arithmetic
-2 + 3 * 4       # 14
-2 ** 3          # 8 (power)
-17 % 5          # 2 (modulo)
-
-# Strings
-"Hello" ++ " World"  # "Hello World"
-
-# Comparisons and Logic
-x > y and z < 10
-a >= 5 or b <= 3
-```
+## Core Features
 
 ### Control Flow
-```
-# If expression
-if x > 10 then
-    x + y
-else
-    x - y
-end
+* If-then-else expressions
+* While loops with break/continue
+* Function definitions with type annotations
+* Let expressions for variable declarations
+* Return statements
+* Multiple statement blocks
 
-# Let binding
-let x be 5 in
-    let y be x * 2 in
-        x + y    # Returns 15
-    end
-end
-```
+### Type System
+* Static type checking
+* Basic types: `int`, `string`, `bool`
+* Type annotations for function parameters and return types
+* Explicit type conversion using `str()`
 
-### Functions
-```
-# Simple function
-fun double(x) is x + x in
-    double(5)    # Returns 10
-end
+### Operations
+* Arithmetic: `+`, `-`, `*`, `/`, `%`, `**` (power)
+* String: `++` (concatenation with strict type checking)
+* Comparison: `<`, `>`, `<=`, `>=`, `==`, `!=`
+* Logical: `and`, `or`
 
-# Recursive function
-fun factorial(n) is
-    if n <= 1 then 1
-    else n * factorial(n - 1)
-    end
-in
-    factorial(5)  # Returns 120
-end
+### Basic Syntax Examples
 
-# Nested function calls
-fun inc(x) is x + 1 in
-    inc(inc(5))  # Returns 7
-end
+1. Variable Declarations and Types:
+```python
+int x = 5;                  # Integer declaration
+string msg = "hello";       # String declaration
 ```
 
-### Multiple Statements
+2. Arithmetic Operations:
+```python
+int a = 5 + 3;             # Addition
+int b = 10 - 2;            # Subtraction
+int c = 4 * 3;             # Multiplication
+int d = 15 / 3;            # Division (integer)
+int e = 17 % 5;            # Modulo
+int f = 2 ** 3;            # Power operation
 ```
-let sum be 0 in
-    let i be 1 in
-        sum = sum + i;
-        i = i + 1
-    end
-end
+
+3. String Operations:
+```python
+string s1 = "Hello";
+string s2 = " World";
+string s3 = s1 ++ s2;      # String concatenation
+string num = str(42);      # Integer to string conversion
+```
+
+4. Comparison Operations:
+```python
+x < y                      # Less than
+x > y                      # Greater than
+x <= y                     # Less than or equal
+x >= y                     # Greater than or equal
+x == y                     # Equal to
+x != y                     # Not equal to
+```
+
+5. Logical Operations:
+```python
+x > 0 and y < 10          # Logical AND
+x < 0 or y > 20           # Logical OR
+```
+
+6. Function Definitions:
+```python
+fun add(x : int) : int {
+    return x + 1;
+}
+
+fun greet(name : string) : string {
+    return "Hello " ++ name;
+}
+```
+
+7. Control Flow:
+```python
+if (x > 0) {
+    println("Positive");
+} else {
+    println("Non-positive");
+}
+
+while (x < 10) {
+    x = x + 1;
+    if (x == 5) {
+        continue;
+    }
+    if (x == 8) {
+        break;
+    }
+    println(x);
+}
+```
+
+8. Multiple Statements and Scoping:
+```python
+fun process(x : int) : int {
+    int a = x + 1;
+    int b = a * 2;
+    return b;
+}
+```
+
+## Type Rules
+
+### String Operations
+* String concatenation (`++`) requires both operands to be strings
+* Use `str()` for explicit conversion of integers to strings
+* No implicit type conversion in string operations
+
+Example:
+```python
+# Correct
+"Hello " ++ "World"          # Works
+"Number: " ++ str(42)        # Works
+
+# Incorrect
+"Error: " ++ 404             # Type Error
+"Code" ++ true              # Type Error
+```
+
+### Function Type Checking
+* Parameter types must match argument types
+* Return type is enforced
+* No implicit conversions in function calls
+
+Example:
+```python
+# Function definition with types
+fun greet(name : string) : string {
+    return "Hello " ++ name ++ "!";
+}
+
+# Correct usage
+greet("Alice")              # Works
+
+# Type errors
+greet(123)                  # Error: Expected string, got int
+```
+
+### Variable Declarations
+* Variables must be declared with types
+* Types are checked at assignment
+
+Example:
+```python
+int x = 5;                  # Works
+string msg = "Hello";       # Works
+int y = "test";            # Error: Type mismatch
+```
+
+## Error Handling
+
+### Type Errors
+* Mismatched types in operations
+* Invalid string concatenation
+* Function parameter type mismatches
+* Return type violations
+* Assignment type mismatches
+
+Example error messages:
+```python
+"Error: " ++ 404
+# Error: String concatenation requires string operands, got str and int
+
+fun process(x : int) : string {
+    return x;
+}
+# Error: Type mismatch: expected string but got int
 ```
 
 ## Implementation Details
 
 ### Environment
-* List-based environment for proper function scoping
-* Support for nested scopes
-* Variable lookup with reversed scope chain
-* Automatic scope cleanup
 
-## Environment Implementation
-
-The interpreter uses a list-based environment system for variable and function scoping:
-
-### Structure
+### Environment Structure
+The environment is implemented as a list of tuples (variable name, value):
 ```python
-# Environment is a list of tuples: [(name, value), ...]
 env = [
-    ("x", 5),              # Variable binding
-    ("f", ("a", body)),    # Function binding: (param_name, function_body)
+    ("x", 5),
+    ("y", "hello"),
+    ("add", (param_name, param_type, body, return_type))
 ]
 ```
 
-### Key Operations
+### Scoping Rules
+1. Variable Lookup:
+```python
+int x = 5;
+{
+    int x = 10;            # Creates new scope
+    println(x);            # Prints 10
+}
+println(x);                # Prints 5
+```
 
-1. **Variable Lookup**
+2. Function Environment:
+```python
+fun outer(x : int) : int {
+    fun inner(y : int) : int {
+        return x + y;      # Captures x from outer scope
+    }
+    return inner(x);
+}
+```
+
+### Type Checking Implementation
+```python
+def check_type(value, expected_type):
+    if expected_type == "int":
+        if not isinstance(value, int):
+            raise TypeError(f"Expected int, got {type(value)}")
+    elif expected_type == "string":
+        if not isinstance(value, str):
+            raise TypeError(f"Expected string, got {type(value)}")
+    return value
+```
+
+### String Concatenation Rules
+```python
+def check_concat_types(left, right):
+    if not isinstance(left, str) or not isinstance(right, str):
+        raise TypeError(f"String concatenation requires string operands")
+    return left + right
+```
+
+### Type Checking Examples
+
+1. Function Type Checking:
+```python
+fun process(x : int) : string {
+    return str(x);         # OK: explicit conversion
+    return x;              # Error: expected string, got int
+}
+```
+
+2. Operation Type Checking:
+```python
+string s = "Hello";
+int n = 42;
+string good = s ++ " World";     # OK: string ++ string
+string bad = s ++ n;             # Error: can't concat string and int
+```
+
+3. Return Type Enforcement:
+```python
+fun calculate(x : int) : int {
+    if (x > 0) {
+        return x + 1;      # OK: returns int
+    } else {
+        return "zero";     # Error: expected int, got string
+    }
+}
+```
+
+### Error Handling Examples
+
+1. Type Mismatch:
+```python
+fun proc(x : string) : int {
+    return x;             # Error: Type mismatch: expected int but got string
+}
+```
+
+2. Invalid Operation:
+```python
+int x = "hello" + 5;     # Error: cannot add string and int
+```
+
+3. Missing Return:
+```python
+fun noreturn(x : int) : int {
+    int y = x + 1;       # Error: function must return a value
+}
+```
+
+### Implementation Details
+
+The interpreter uses pattern matching for AST evaluation:
+```python
+match tree:
+    case Number(v):
+        return int(v)
+    case BinOp("+", l, r):
+        return e(l, env) + e(r, env)
+    case Call(f, x):
+        param, param_type, body, return_type = lookup(env, f)
+        # Type checking and evaluation...
+```
+
+Environment lookup uses reverse list traversal for proper scoping:
 ```python
 def lookup(env, v):
-    # Search from most recent binding (end of list)
-    for name, value in reversed(env):
-        if name == v:
-            return value
+    for u, uv in reversed(env):
+        if u == v:
+            return uv
     raise ValueError(f"Variable {v} not found")
 ```
 
-2. **Scope Management**
+## Example Programs
+
+### String Manipulation
 ```python
-# Let binding creates new scope
-case Let(var, expr, body):
-    env.append((var, e(expr, env)))   # Add new binding
-    result = e(body, env)             # Evaluate in new scope
-    env.pop()                         # Clean up scope
-    return result
+fun makeTitle(text : string) : string {
+    return "*** " ++ text ++ " ***";
+}
 
-# Function definition
-case Fun(name, param, body, expr):
-    env.append((name, (param, body))) # Store function
-    result = e(expr, env)            
-    env.pop()                         # Clean up
-    return result
-
-# Function call
-case Call(fname, arg):
-    param, body = lookup(env, fname)  # Get function
-    env.append((param, e(arg, env)))  # Bind parameter
-    result = e(body, env)            # Execute function
-    env.pop()                         # Clean up parameter
-    return result
+fun error(code : int) : string {
+    return "Error " ++ str(code);  # Explicit conversion
+}
 ```
 
-### Scoping Example
+### Type-Safe Functions
 ```python
-fun double(x) is x + x in  # Binds double -> ("x", body)
-    let y be 5 in          # Binds y -> 5
-        double(y)          # Creates temporary x -> 5 during call
-    end
-end
+fun double(x : int) : int {
+    return x + x;
+}
 
-# Environment evolution:
-[]                                  # Initial
-[("double", ("x", body))]          # After fun
-[("double", ...), ("y", 5)]        # After let
-[("double", ...), ("y", 5), ("x", 5)] # During function call
-[("double", ...), ("y", 5)]        # After function call
-[]                                 # Final
+fun concat(a : string, b : string) : string {
+    return a ++ b;
+}
 ```
-
-### AST Node Types
-* `BinOp`: Binary operations
-* `Number`: Numeric literals
-* `String`: String literals
-* `If`: Conditional expressions
-* `Var`: Variable references
-* `Assign`: Variable assignments
-* `Let`: Let expressions
-* `Fun`: Function definitions
-* `Call`: Function calls
-* `Sequence`: Multiple statements
-
-### Error Handling
-* Syntax errors
-* Undefined variables
-* Invalid function calls
-* Missing parameters
-* Unterminated strings
-* Type mismatches
 
 ## Running Tests
-```python
-# Function tests
-fun double(x) is x + x in double(5) end         # Returns 10
-fun square(x) is x * x in square(4) end         # Returns 16
-fun inc(x) is x + 1 in inc(inc(5)) end         # Returns 7
-fun factorial(n) is                             # Returns 120
-    if n <= 1 then 1
-    else n * factorial(n - 1)
-    end
-in
-    factorial(5)
-end
+The interpreter includes comprehensive test suites in `tests.py`:
+* Type checking
+* String operations
+* Function calls
+* Control flow
+* Error handling
+
+To run all tests:
+```bash
+python tests.py
 ```
 
 ## Project Structure
@@ -201,9 +342,12 @@ end
 compiler/
 │
 ├── main.py         # Core implementation
-│   ├── Lexer
-│   ├── Parser
-│   └── Evaluator
-│
+├── tests.py        # Test suites
 └── README.md       # Documentation
+```
+
+## Running the Interpreter
+
+```bash
+python3 tests.py          # Run all test cases
 ```
