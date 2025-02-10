@@ -55,6 +55,19 @@ class Call(AST):
     n: str    
     a: AST    
 
+@dataclass
+class While(AST):
+    cond: AST
+    body: AST
+
+@dataclass
+class Break(AST):
+    pass
+
+@dataclass
+class Continue(AST):
+    pass
+
 class Token:
     pass
 
@@ -146,6 +159,19 @@ def e(tree: AST, env=None) -> int | bool | str:
                 return e(then, env)
             else:
                 return e(else_, env)
+        case While(cond, body):
+                while e(cond, env):
+                    try:
+                        result = e(body, env)
+                    except Break:
+                        return None  # Exiting the loop on Break
+                    except Continue:
+                        continue  # Continuing the loop on Continue
+                return None
+        case Break():
+                raise Break()  # Raise an exception to break the loop
+        case Continue():
+                raise Continue() 
         case Sequence(statements):
             result = None
             for stmt in statements:
@@ -177,7 +203,7 @@ def lex(s: str) -> Iterator[Token]:
                 t = t + s[i]
                 i = i + 1
             if t in {"and", "or", "let", "be", "in", "end", "if", "then", 
-                    "else", "while", "do", "fun", "is"}:  
+                    "else", "while", "do", "fun", "is", "continue", "break"}:  
                 yield KeywordToken(t)
             else:
                 yield VarToken(t)
@@ -250,6 +276,19 @@ def parse(s: str) -> AST:
                 else_ = parse_stmt()  
                 expect(KeywordToken("end"))
                 return If(cond, then, else_)
+            case KeywordToken("while"):
+                next(t)
+                cond = parse_expr()
+                expect(KeywordToken("do"))
+                body = parse_statements()
+                expect(KeywordToken("end"))
+                return While(cond, body)
+            case KeywordToken("break"):
+                next(t)
+                return Break()
+            case KeywordToken("continue"):
+                next(t)
+                return Continue()
             case _:
                 return parse_expr()
 
@@ -384,107 +423,131 @@ def parse(s: str) -> AST:
     return parse_stmt()  
 
 
-# Example usage:
-test_cases = [
-    'if x >= 10 and y <= 20 then x + y else x - y end',
-    '2 ** 3',  # Power operation
-    '17 % 5',  # Modulo operation
-    '"Hello" ++ " World"',  # String concatenation
-    'x == y',  # Equality comparison
-    'x != y',  # Inequality comparison
-    '(2 + 3) * 4',  # Should evaluate to 20
-    '2 + (3 * 4)',  # Should evaluate to 14
-    'if (x > 10) then (x + y) else (x - y) end',
-    '(2 ** 3) + 1',  # Should evaluate to 9
-    '((2 + 3) * (4 + 5))',  # Should evaluate to 45
-]
+# # Example usage:
+# test_cases = [
+#     'if x >= 10 and y <= 20 then x + y else x - y end',
+#     '2 ** 3',  # Power operation
+#     '17 % 5',  # Modulo operation
+#     '"Hello" ++ " World"',  # String concatenation
+#     'x == y',  # Equality comparison
+#     'x != y',  # Inequality comparison
+#     '(2 + 3) * 4',  # Should evaluate to 20
+#     '2 + (3 * 4)',  # Should evaluate to 14
+#     'if (x > 10) then (x + y) else (x - y) end',
+#     '(2 ** 3) + 1',  # Should evaluate to 9
+#     '((2 + 3) * (4 + 5))',  # Should evaluate to 45
+# ]
 
-# Run test cases
-test_env = [("x", 15), ("y", 10)]  # Changed from dict to list format
-print("\nRunning test cases:")
-for test in test_cases:
-    try:
-        result = e(parse(test), test_env)
-        print(f"Test: {test}")
-        print(f"Result: {result}")
-        print("-" * 30)
-    except Exception as err:
-        print(f"Error in test '{test}': {err}")
-        print("-" * 30)
+# # Run test cases
+# test_env = [("x", 15), ("y", 10)]  # Changed from dict to list format
+# print("\nRunning test cases:")
+# for test in test_cases:
+#     try:
+#         result = e(parse(test), test_env)
+#         print(f"Test: {test}")
+#         print(f"Result: {result}")
+#         print("-" * 30)
+#     except Exception as err:
+#         print(f"Error in test '{test}': {err}")
+#         print("-" * 30)
 
-# Test specifically for the if condition
-print("\nTesting if condition:")
-test_env = [("x", 15), ("y", 10)]
-test = 'if ((x == 15) and y < 20) then (x + y)*y else (x - y) end'
-result = e(parse(test), test_env)
-print(f"Test: {test}")
-print(f"Result: {result}")  # Should print 25 (15 + 10)
+# # Test specifically for the if condition
+# print("\nTesting if condition:")
+# test_env = [("x", 15), ("y", 10)]
+# test = 'if ((x == 15) and y < 20) then (x + y)*y else (x - y) end'
+# result = e(parse(test), test_env)
+# print(f"Test: {test}")
+# print(f"Result: {result}")  # Should print 25 (15 + 10)
 
-# Add a test case to verify the fix
-print("\nTesting comparison operators:")
-test_env = [("x", 15), ("y", 10)]
-comparison_tests = [
-    'x > 10',  # Should be True
-    'if x > 10 then x + y else x - y end',  # Should be 25
-    'x >= 15',  # Should be True
-    'y < x',  # Should be True
-]
+# # Add a test case to verify the fix
+# print("\nTesting comparison operators:")
+# test_env = [("x", 15), ("y", 10)]
+# comparison_tests = [
+#     'x > 10',  # Should be True
+#     'if x > 10 then x + y else x - y end',  # Should be 25
+#     'x >= 15',  # Should be True
+#     'y < x',  # Should be True
+# ]
 
-for test in comparison_tests:
-    try:
-        result = e(parse(test), test_env)
-        print(f"Test: {test}")
-        print(f"Result: {result}")
-        print("-" * 30)
-    except Exception as err:
-        print(f"Error in test '{test}': {err}")
-        print("-" * 30)
+# for test in comparison_tests:
+#     try:
+#         result = e(parse(test), test_env)
+#         print(f"Test: {test}")
+#         print(f"Result: {result}")
+#         print("-" * 30)
+#     except Exception as err:
+#         print(f"Error in test '{test}': {err}")
+#         print("-" * 30)
 
-# Update test cases
-let_tests = [
-    "let a be 3 in a + a end",  # Should be 6
-    "let a be 3 in let b be a + 2 in a + b end end",  # Should be 8
-    "let x be 5 in let y be x * 2 in x + y end end",  # Should be 15
-    "let x be (2*5) in let y be (x + 3) in x + y end end",  # Should be 23
-    "let a be 3 in if a == 3 then 1+1 else 2+2 end end",  # Should now work
-    "let x be 10 in if x > 5 then x + 2 else x - 2 end end"  # Additional test
-]
+# # Update test cases
+# let_tests = [
+#     "let a be 3 in a + a end",  # Should be 6
+#     "let a be 3 in let b be a + 2 in a + b end end",  # Should be 8
+#     "let x be 5 in let y be x * 2 in x + y end end",  # Should be 15
+#     "let x be (2*5) in let y be (x + 3) in x + y end end",  # Should be 23
+#     "let a be 3 in if a == 3 then 1+1 else 2+2 end end",  # Should now work
+#     "let x be 10 in if x > 5 then x + 2 else x - 2 end end"  # Additional test
+# ]
 
 
-print("\nTesting let expressions:")
-for test in let_tests:
-    try:
-        result = e(parse(test))
-        print(f"Test: {test}")
-        print(f"Result: {result}")
-        print("-" * 30)
-    except Exception as err:
-        print(f"Error in test '{test}': {err}")
-        print("-" * 30)
+# print("\nTesting let expressions:")
+# for test in let_tests:
+#     try:
+#         result = e(parse(test))
+#         print(f"Test: {test}")
+#         print(f"Result: {result}")
+#         print("-" * 30)
+#     except Exception as err:
+#         print(f"Error in test '{test}': {err}")
+#         print("-" * 30)
 
-# Add these test cases at the end:
-function_tests = [
-    "fun double(x) is x + x in double(5) end",
-    "fun square(x) is x * x in square(4) end",
-    "fun inc(x) is x + 1 in inc(inc(5)) end",
-    """fun factorial(n) is 
-         if n <= 1 then 1 else n * factorial(n - 1) end 
-       in factorial(5) end""",  # Simplified to single line for better parsing
-    # More test cases
-    """fun fib(n) is
-         if n <= 1 then n
-         else fib(n-1) + fib(n-2)
-         end
-       in fib(6) end"""
-]
+# # Add these test cases at the end:
+# function_tests = [
+#     "fun double(x) is x + x in double(5) end",
+#     "fun square(x) is x * x in square(4) end",
+#     "fun inc(x) is x + 1 in inc(inc(5)) end",
+#     """fun factorial(n) is 
+#          if n <= 1 then 1 else n * factorial(n - 1) end 
+#        in factorial(5) end""",  # Simplified to single line for better parsing
+#     # More test cases
+#     """fun fib(n) is
+#          if n <= 1 then n
+#          else fib(n-1) + fib(n-2)
+#          end
+#        in fib(6) end"""
+# ]
 
-print("\nTesting functions:")
-for test in function_tests:
-    try:
-        result = e(parse(test))
-        print(f"Test: {test}")
-        print(f"Result: {result}")
-        print("-" * 30)
-    except Exception as err:
-        print(f"Error in test: {err}")
-        print("-" * 30)
+# print("\nTesting functions:")
+# for test in function_tests:
+#     try:
+#         result = e(parse(test))
+#         print(f"Test: {test}")
+#         print(f"Result: {result}")
+#         print("-" * 30)
+#     except Exception as err:
+#         print(f"Error in test: {err}")
+#         print("-" * 30)
+
+# # program = """
+# # let x be 5 in
+# # while x < 10 do
+# #   if x == 5 then 
+# #     break 
+# #   else
+# #     let x be x in x+1 end
+# #   end
+# # end
+# # end
+# # """
+
+code = """
+while x < 5 do
+    x = x + 1
+end
+let x be x+2 in if x > 5 then x + 2 else x - 2 end end
+"""
+
+
+test_env = [("x", 1)]
+
+print(e(parse(code),test_env))  # Should print 5
