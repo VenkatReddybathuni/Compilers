@@ -3,17 +3,17 @@ from main import e, parse
 def run_tests():
     # Basic operation test cases
     test_cases = [
-        'if (x >= 10 and y <= 20) { println(x + y) } else { println(x - y) }',
-        'println(2 ** 3)',  # Power operation
-        'println(17 % 5)',  # Modulo operation
-        'println("Hello" ++ " World")',  # String concatenation
-        'println(x == y)',  # Equality comparison
-        'println(x != y)',  # Inequality comparison
-        'println((2 + 3) * 4)',  # Should evaluate to 20
-        'println(2 + (3 * 4))',  # Should evaluate to 14
-        'if (x > 10) { println(x + y) } else { println(x - y) }',
-        'println((2 ** 3) + 1)',  # Should evaluate to 9
-        'println((2 + 3) * (4 + 5))',  # Should evaluate to 45
+        'if (x >= 10 and y <= 20) { println(x + y); } else { println(x - y); };',
+        'println(2 ** 3);',  # Power operation
+        'println(17 % 5);',  # Modulo operation
+        'println("Hello" ++ " World");',  # String concatenation
+        'println(x == y);',  # Equality comparison
+        'println(x != y);',  # Inequality comparison
+        'println((2 + 3) * 4);',  # Should evaluate to 20
+        'println(2 + (3 * 4));',  # Should evaluate to 14
+        'if (x > 10) { println(x + y); } else { println(x - y); };',
+        'println((2 ** 3) + 1);',  # Should evaluate to 9
+        'println((2 + 3) * (4 + 5));',  # Should evaluate to 45
     ]
 
     # Run basic test cases
@@ -24,8 +24,8 @@ def run_tests():
     # Test if conditions
     print("\nTesting if conditions:")
     if_tests = [
-        'if ((x == 15) and y < 20) { println((x + y)*y) } else { println(x - y) }',
-        'if (x > 10) { x + y } else { x - y }',
+        'if ((x == 15) and y < 20) { println((x + y)*y); } else { println(x - y); };',
+        'if (x > 10) { println(x + y); } else { println(x - y); };',
     ]
     run_test_cases(if_tests, test_env)
 
@@ -52,7 +52,7 @@ def run_tests():
         fun double(x : int) : int {
             return x + x;
         }
-        double(5);
+        println(double(5));
         """,
         """
         fun greet(name : string) : string {

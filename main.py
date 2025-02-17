@@ -155,6 +155,7 @@ def lookup(env, v):
             return uv
     raise ValueError(f"Variable {v} not found")
 
+
 def update_env(env, name, value):
     """Update an existing variable in the environment or add it if doesn't exist"""
     for i, (var, _) in enumerate(env):
@@ -162,7 +163,6 @@ def update_env(env, name, value):
             env[i] = (name, value)
             return
     env.append((name, value))
-
 def e(tree: AST, env=None) -> int | bool | str:
     if env is None:
         env = []  # Empty list for environment
@@ -183,18 +183,18 @@ def e(tree: AST, env=None) -> int | bool | str:
         case Call(f, x):
             param, param_type, body, return_type = lookup(env, f)  # Get function definition with types
             arg_value = e(x, env)
-            
+
             # Add explicit conversion for string parameters if needed
             if param_type == "string" and isinstance(arg_value, int):
                 arg_value = str(arg_value)
             elif param_type == "int" and isinstance(arg_value, str):
                 raise TypeError(f"Function '{f}' expects int but got string")
-                
+
             try:
                 check_type(arg_value, param_type)
             except TypeError as te:
                 raise TypeError(f"Function '{f}' parameter type mismatch: {str(te)}")
-                
+
             call_env = env.copy()
             call_env.append((param, arg_value))
             try:
@@ -233,11 +233,11 @@ def e(tree: AST, env=None) -> int | bool | str:
         case BinOp("++", l, r):  
             left_val = e(l, env)
             right_val = e(r, env)
-            
+
             # No automatic conversion - both must be strings
             if not isinstance(left_val, str) or not isinstance(right_val, str):
                 raise TypeError(f"Cannot concatenate {type(left_val).__name__} with {type(right_val).__name__}. Use str() for explicit conversion")
-            
+
             return left_val + right_val
         case BinOp(">", l, r):
             return e(l, env) > e(r, env)
@@ -252,13 +252,14 @@ def e(tree: AST, env=None) -> int | bool | str:
                 result = e(stmt, env)
             return result
         case Assign(name, expr):
+
             value = e(expr, env)
             update_env(env, name, value)
             return value
         case Let(var, expr, body):
-            value = e(expr, env)  # Evaluate the expression first
+            value = e(expr, env)  
             update_env(env, var, value)  # Update or add variable
-            return e(body, env)  # Use the same environment
+            return e(body, env) 
         case Return(expr):
             result = e(expr, env)
             raise ReturnValue(result)
@@ -273,7 +274,7 @@ def e(tree: AST, env=None) -> int | bool | str:
                 except ContinueLoop:
                     continue
                 except BreakLoop:
-                    break
+                    break      
             return result if result is not None else 0
         case Continue():
             raise ContinueLoop()
@@ -348,14 +349,14 @@ def parse(s: str) -> AST:
         while t.peek(None) is not None:
             if isinstance(t.peek(), OperatorToken) and t.peek().o == '}':
                 break
-                
+
             stmt = parse_stmt()
             statements.append(stmt)
-            
+
             # Handle semicolons more carefully
             if isinstance(t.peek(None), OperatorToken) and t.peek().o == ';':
                 next(t)
-                
+
         # Always return a Sequence for multiple statements
         if len(statements) > 1:
             return Sequence(statements)
@@ -372,36 +373,48 @@ def parse(s: str) -> AST:
                     raise ParseError(f"Expected variable name after {typ}")
                 var = next(t).v
                 expect(OperatorToken("="))
+                
+                # Check for function call
+                if isinstance(t.peek(None), VarToken):
+                    func_name = next(t).v
+                    if t.peek(None) == OperatorToken("("):
+                        next(t)
+                        arg = parse_expr()
+                        expect(OperatorToken(")"))
+                        expect(OperatorToken(";"))
+                        return Let(var, Call(func_name, arg), Sequence([]))
+                    t.prepend(VarToken(func_name))  # Put back the token if not a function call
+                
                 expr = parse_expr()
                 expect(OperatorToken(";"))
                 next_stmt = parse_statements() if t.peek(None) is not None else None
-                return Let(var, expr, next_stmt if next_stmt else Var(var))
+                return Let(var, expr, next_stmt if next_stmt else Sequence([]))
             case KeywordToken("fun"):
                 next(t)
                 if not isinstance(t.peek(None), VarToken):
                     raise ParseError("Expected function name")
                 name = next(t).v
                 expect(OperatorToken("("))
-                
+
                 # Parse parameter name
                 if not isinstance(t.peek(None), VarToken):
                     raise ParseError("Expected parameter name")
                 param = next(t).v
-                
+
                 # Parse parameter type
                 expect(OperatorToken(":"))
                 if not isinstance(t.peek(None), TypeToken):
                     raise ParseError("Expected parameter type")
                 param_type = next(t).t
-                
+
                 expect(OperatorToken(")"))
-                
+
                 # Handle return type
                 expect(OperatorToken(":"))
                 if not isinstance(t.peek(None), TypeToken):
                     raise ParseError("Expected return type")
                 return_type = next(t).t
-                
+
                 expect(OperatorToken("{"))
                 body = parse_statements()
                 expect(OperatorToken("}"))
@@ -416,7 +429,7 @@ def parse(s: str) -> AST:
                 expect(OperatorToken("{"))  # Expect opening brace
                 then = parse_statements()   # Parse statements inside braces
                 expect(OperatorToken("}"))  # Expect closing brace
-                
+
                 if t.peek(None) == KeywordToken("else"):
                     next(t)
                     expect(OperatorToken("{"))
@@ -424,7 +437,7 @@ def parse(s: str) -> AST:
                     expect(OperatorToken("}"))
                 else:
                     else_ = Number("0")  # Default else case
-                    
+
                 return If(cond, then, else_)
             case KeywordToken("return"):
                 next(t)
@@ -451,11 +464,23 @@ def parse(s: str) -> AST:
                 if t.peek(None) == OperatorToken(";"):
                     next(t)
                 return Break()
+            case KeywordToken("println"):
+                next(t)
+                expect(OperatorToken("("))
+                expr = parse_expr()
+                expect(OperatorToken(")"))
+                expect(OperatorToken(";"))  # Always require semicolon
+                return PrintLn(expr)
             case _:
                 return parse_expr()
 
     def parse_expr():
-        return parse_assign()  
+        expr = parse_assign()
+        # If the expression is a function call and we're at statement level,
+        # expect a semicolon
+        if isinstance(expr, Call) and isinstance(t.peek(None), OperatorToken) and t.peek().o == ';':
+            next(t)
+        return expr
 
     def parse_assign():
         if isinstance(t.peek(None), VarToken):
@@ -552,8 +577,7 @@ def parse(s: str) -> AST:
                 expect(OperatorToken("("))
                 expr = parse_expr()
                 expect(OperatorToken(")"))
-                if t.peek(None) == OperatorToken(";"):
-                    next(t)
+                expect(OperatorToken(";"))  # Always require semicolon
                 return PrintLn(expr)
             case KeywordToken("str"):
                 next(t)
@@ -564,26 +588,28 @@ def parse(s: str) -> AST:
             case VarToken(name):
                 next(t)
                 if t.peek(None) == OperatorToken("="):
-                    next(t)
-                    # Handle function call on the right side of assignment
-                    if isinstance(t.peek(None), VarToken):
-                        func_name = next(t).v
-                        if t.peek(None) == OperatorToken("("):
-                            next(t)
-                            arg = parse_expr()
-                            expect(OperatorToken(")"))
-                            expect(OperatorToken(";"))
-                            return Let(name, Call(func_name, arg), Var(name))
-                    # Handle normal expression assignment
-                    expr = parse_expr()
-                    expect(OperatorToken(";"))
-                    return Let(name, expr, Var(name))
+                    # ... existing assignment handling ...
+                    if t.peek(None) == OperatorToken("="):
+                        next(t)
+                        # Check for function call
+                        if isinstance(t.peek(None), VarToken):
+                            func_name = next(t).v
+                            if t.peek(None) == OperatorToken("("):
+                                next(t)
+                                arg = parse_expr()
+                                expect(OperatorToken(")"))
+                                expect(OperatorToken(";"))
+                                return Let(name, Call(func_name, arg), Sequence([]))
+                            t.prepend(VarToken(func_name))  # Put back the token if not a function call
+                        # Handle normal expression assignment
+                        expr = parse_expr()
+                        expect(OperatorToken(";"))
+                        return Let(name, expr, Sequence([]))
                 elif t.peek(None) == OperatorToken("("):
                     next(t)
                     arg = parse_expr()
                     expect(OperatorToken(")"))
-                    if t.peek(None) == OperatorToken(";"):
-                        next(t)
+                    # Don't consume semicolon here, let the statement level handle it
                     return Call(name, arg)
                 return Var(name)
             case OperatorToken('('):
@@ -606,4 +632,3 @@ def parse(s: str) -> AST:
 
 if __name__ == "__main__":
     from tests import run_tests
-    run_tests()
