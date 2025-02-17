@@ -3,17 +3,17 @@ from main import e, parse
 def run_tests():
     # Basic operation test cases
     test_cases = [
-        'if (x >= 10 and y <= 20) { x + y } else { x - y }',
-        '2 ** 3',  # Power operation
-        '17 % 5',  # Modulo operation
-        '"Hello" ++ " World"',  # String concatenation
-        'x == y',  # Equality comparison
-        'x != y',  # Inequality comparison
-        '(2 + 3) * 4',  # Should evaluate to 20
-        '2 + (3 * 4)',  # Should evaluate to 14
-        'if (x > 10) { x + y } else { x - y }',
-        '(2 ** 3) + 1',  # Should evaluate to 9
-        '((2 + 3) * (4 + 5))',  # Should evaluate to 45
+        'if (x >= 10 and y <= 20) { println(x + y) } else { println(x - y) }',
+        'println(2 ** 3)',  # Power operation
+        'println(17 % 5)',  # Modulo operation
+        'println("Hello" ++ " World")',  # String concatenation
+        'println(x == y)',  # Equality comparison
+        'println(x != y)',  # Inequality comparison
+        'println((2 + 3) * 4)',  # Should evaluate to 20
+        'println(2 + (3 * 4))',  # Should evaluate to 14
+        'if (x > 10) { println(x + y) } else { println(x - y) }',
+        'println((2 ** 3) + 1)',  # Should evaluate to 9
+        'println((2 + 3) * (4 + 5))',  # Should evaluate to 45
     ]
 
     # Run basic test cases
@@ -24,7 +24,7 @@ def run_tests():
     # Test if conditions
     print("\nTesting if conditions:")
     if_tests = [
-        'if ((x == 15) and y < 20) { (x + y)*y } else { x - y }',
+        'if ((x == 15) and y < 20) { println((x + y)*y) } else { println(x - y) }',
         'if (x > 10) { x + y } else { x - y }',
     ]
     run_test_cases(if_tests, test_env)
@@ -220,6 +220,43 @@ def run_tests():
         """
     ]
     run_test_cases(multiplication_table)
+
+    # Test function calls with variable assignments
+    print("\nTesting function calls with variable assignments:")
+    function_assignment_tests = [
+        """
+        fun square(x : int) : int {
+            return x * x;
+        }
+        int result = square(5);
+        println("Square of 5: " ++ str(result));
+        """,
+        """
+        fun addOne(x : int) : int {
+            return x + 1;
+        }
+        int a = 5;
+        int b = addOne(a);
+        println("a: " ++ str(a) ++ ", b: " ++ str(b));
+        """,
+        """
+        fun makeGreeting(name : string) : string {
+            return "Hello " ++ name;
+        }
+        string msg = makeGreeting("Alice");
+        println(msg);
+        """,
+        """
+        fun double(x : int) : int {
+            return x + x;
+        }
+        int x = 10;
+        int y = double(x);
+        int z = double(y);
+        println("x: " ++ str(x) ++ ", y: " ++ str(y) ++ ", z: " ++ str(z));
+        """
+    ]
+    run_test_cases(function_assignment_tests)
 
 def run_test_cases(tests, env=None):
     for test in tests:
