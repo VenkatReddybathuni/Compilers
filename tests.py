@@ -187,6 +187,40 @@ def run_tests():
     ]
     run_test_cases(while_control_tests)
 
+    # Test Project Euler - Even Fibonacci Sum
+    print("\nTesting Project Euler - Even Fibonacci Sum:")
+    euler_tests = [
+        """
+        int sum = 0;
+        int a = 1;
+        int b = 2;
+        
+        while (b < 4000000) {
+            if (b % 2 == 0) {
+                sum = sum + b;
+            }
+            int temp = a + b;
+            a = b;
+            b = temp;
+        }
+        println(sum);  
+        """
+    ]
+    run_test_cases(euler_tests)
+
+    # Test multiplication table
+    print("\nTesting 17 times table:")
+    multiplication_table = [
+        """
+        int i = 1;
+        while (i <= 10) {
+            println("17*" ++ str(i) ++ " = " ++ str(17 * i));
+            i = i + 1;
+        }
+        """
+    ]
+    run_test_cases(multiplication_table)
+
 def run_test_cases(tests, env=None):
     for test in tests:
         try:

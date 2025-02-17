@@ -155,6 +155,14 @@ def lookup(env, v):
             return uv
     raise ValueError(f"Variable {v} not found")
 
+def update_env(env, name, value):
+    """Update an existing variable in the environment or add it if doesn't exist"""
+    for i, (var, _) in enumerate(env):
+        if var == name:
+            env[i] = (name, value)
+            return
+    env.append((name, value))
+
 def e(tree: AST, env=None) -> int | bool | str:
     if env is None:
         env = []  # Empty list for environment
@@ -244,14 +252,13 @@ def e(tree: AST, env=None) -> int | bool | str:
                 result = e(stmt, env)
             return result
         case Assign(name, expr):
-            env.append((name, e(expr, env)))
-            return lookup(env, name)
+            value = e(expr, env)
+            update_env(env, name, value)
+            return value
         case Let(var, expr, body):
             value = e(expr, env)  # Evaluate the expression first
-            new_env = env.copy()
-            new_env.append((var, value))  # Bind variable to its value
-            result = e(body, new_env)  # Evaluate the body with new binding
-            return result  # Return the body's result
+            update_env(env, var, value)  # Update or add variable
+            return e(body, env)  # Use the same environment
         case Return(expr):
             result = e(expr, env)
             raise ReturnValue(result)
@@ -259,14 +266,15 @@ def e(tree: AST, env=None) -> int | bool | str:
             val = e(expr, env)
             return str(val)
         case While(cond, body):
+            result = None
             while e(cond, env):
                 try:
-                    e(body, env)
+                    result = e(body, env)
                 except ContinueLoop:
                     continue
                 except BreakLoop:
                     break
-            return None
+            return result if result is not None else 0
         case Continue():
             raise ContinueLoop()
         case Break():
