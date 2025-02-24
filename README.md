@@ -325,25 +325,38 @@ fun concat(a : string, b : string) : string {
 ```
 
 ## Running Tests
-The interpreter includes comprehensive test suites in `tests.py`:
-* Type checking
-* String operations
-* Function calls
-* Control flow
-* Error handling
 
-To run all tests:
+### All Tests
+From the main directory:
 ```bash
-python tests.py
+python3 -m tests.tests.py
+```
+
+### Individual Test Suites
+```bash
+# Run unit tests only
+python3 -m tests.unit_tests.py
+
+# Run Project Euler tests
+python3 -m tests.project_euler_tests.py
+
+# Run error handling tests
+python3 -m tests.error_tests.py
 ```
 
 ## Project Structure
 ```
-compiler/
-│
-├── main.py         # Core implementation
-├── tests.py        # Test suites
-└── README.md       # Documentation
+/
+├── main.py                 # Core language implementation
+├── tests/                  # Test suites
+│   ├── __init__.py        # Makes tests a package
+│   ├── test_framework.py  # Testing infrastructure
+│   ├── unit_tests.py      # Basic language feature tests
+│   ├── error_tests.py     # Error handling tests
+│   ├── project_euler_tests.py  # Complex algorithmic tests
+│   └── tests.py   # Test runner
+├── LICENSE                # MIT License
+└── README.md             # This documentation
 ```
 
 ## Running the Interpreter

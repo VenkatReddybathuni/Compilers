@@ -629,6 +629,3 @@ def parse(s: str) -> AST:
                 raise ParseError(f"Unexpected token: {t.peek(None)}")
 
     return parse_stmt()  
-
-if __name__ == "__main__":
-    from tests import run_tests
