@@ -26,6 +26,14 @@ def run_tests():
             expected_error=TypeError,
             # We don't check the specific error message, just that it's a TypeError
         ),
+        TestCase(
+            name="Out of Bounds Error",
+            code="""
+            int[] arr = [1, 2, 3];
+            println(arr[3]);
+            """,
+            expected_error=IndexError
+        ),
     ]
     results = run_test_suite(test_cases)
     results.print_summary()

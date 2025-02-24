@@ -82,6 +82,25 @@ class Continue(AST):
 class Break(AST):
     pass
 
+@dataclass
+class Array(AST):
+    elements: list[AST]
+
+@dataclass
+class ArrayAccess(AST):
+    array: AST
+    index: AST
+
+@dataclass
+class ArrayAssign(AST):
+    array: AST
+    index: AST
+    value: AST
+
+@dataclass
+class Length(AST):
+    expr: AST
+
 class Token:
     pass
 
@@ -108,6 +127,11 @@ class StringToken(Token):
 @dataclass
 class TypeToken(Token):
     t: str
+    is_array: bool = False  # Add array type flag
+
+@dataclass
+class ArrayToken(Token):
+    elements: list[Token]
 
 class ReturnValue(Exception):
     def __init__(self, value):
@@ -138,7 +162,18 @@ def convert_to_string(value, context=""):
     raise TypeError(f"{context}Cannot convert {type(value).__name__} to string")
 
 def check_type(value, expected_type):
-    if expected_type == "int":
+    if '[' in expected_type:  # Handle array types
+        base_type = expected_type.split('[')[0].strip()
+        if not isinstance(value, list):
+            raise TypeError(f"Type mismatch: expected {expected_type} but got {type(value).__name__}")
+        if base_type == "int":
+            if not all(isinstance(x, int) for x in value):
+                raise TypeError(f"Type mismatch: array elements must be {base_type}")
+        return value
+    
+    if expected_type == "any":  # Special case for len() function
+        return value
+    elif expected_type == "int":
         if not isinstance(value, int):
             raise TypeError(f"Type mismatch: expected int but got {type(value).__name__}")
     elif expected_type == "string":
@@ -150,6 +185,10 @@ def check_type(value, expected_type):
     return value
 
 def lookup(env, v):
+    # Add built-in functions
+    if v == "len":
+        return ("x", "any", Length(Var("x")), "int")
+    
     for u, uv in reversed(env):
         if u == v:
             return uv
@@ -163,7 +202,7 @@ def update_env(env, name, value):
             env[i] = (name, value)
             return
     env.append((name, value))
-def e(tree: AST, env=None) -> int | bool | str:
+def e(tree: AST, env=None) -> int | bool | str | list:
     if env is None:
         env = []  # Empty list for environment
 
@@ -280,6 +319,31 @@ def e(tree: AST, env=None) -> int | bool | str:
             raise ContinueLoop()
         case Break():
             raise BreakLoop()
+        case Array(elements):
+            return [e(elem, env) for elem in elements]
+        case ArrayAccess(array, index):
+            arr = e(array, env)
+            idx = e(index, env)
+            if isinstance(arr, (list, str)):
+                if 0 <= idx < len(arr):
+                    return arr[idx]
+                raise IndexError("Array index out of bounds")
+            raise TypeError(f"Cannot index into {type(arr).__name__}")
+        case ArrayAssign(array, index, value):
+            arr = e(array, env)
+            idx = e(index, env)
+            val = e(value, env)
+            if isinstance(arr, list):
+                if 0 <= idx < len(arr):
+                    arr[idx] = val
+                    return val
+                raise IndexError("Array index out of bounds")
+            raise TypeError("Cannot assign to non-array type")
+        case Length(expr):
+            val = e(expr, env)
+            if isinstance(val, (list, str)):
+                return len(val)
+            raise TypeError(f"Cannot get length of {type(val).__name__}")
 
 def lex(s: str) -> Iterator[Token]:
     i = 0
@@ -296,10 +360,17 @@ def lex(s: str) -> Iterator[Token]:
             while i < len(s) and (s[i].isalpha() or s[i].isdigit()):  # Allow digits in identifiers
                 t = t + s[i]
                 i = i + 1
+                
+            # Check if this is an array type (e.g. "int[]")
+            is_array = False
+            if i + 1 < len(s) and s[i] == '[' and s[i + 1] == ']':
+                is_array = True
+                i += 2
+                
             if t in {"and", "or", "if", "else", "fun", "return", "println", "str", "while", "continue", "break"}:  # Added while, continue, break
                 yield KeywordToken(t)
             elif t in {"int", "float", "string", "void", "bool"}:  # Types are now handled separately
-                yield TypeToken(t)
+                yield TypeToken(t, is_array)
             else:
                 yield VarToken(t)
         elif s[i].isdigit():
@@ -322,7 +393,7 @@ def lex(s: str) -> Iterator[Token]:
                 raise ParseError("Unterminated string literal")
         else:
             match t := s[i]:
-                case '+' | '*' | '<' | '=' | '-' | '/' | '%' | '>' | '!' | '(' | ')' | ';' | '{' | '}' | ':':  # Added colon
+                case '+' | '*' | '<' | '=' | '-' | '/' | '%' | '>' | '!' | '(' | ')' | ';' | '{' | '}' | ':' | '[' | ']' | ',':  # Added comma
                     i += 1
                     if i < len(s):
                         next_char = s[i]
@@ -367,12 +438,21 @@ def parse(s: str) -> AST:
 
     def parse_stmt():
         match t.peek(None):
-            case TypeToken(typ):
+            case TypeToken(typ, is_array):
                 next(t)  # consume type token
                 if not isinstance(t.peek(None), VarToken):
                     raise ParseError(f"Expected variable name after {typ}")
                 var = next(t).v
                 expect(OperatorToken("="))
+                
+                if is_array:
+                    # Handle array initialization
+                    if not isinstance(t.peek(None), OperatorToken) or t.peek().o != '[':
+                        raise ParseError(f"Expected array literal after {var}")
+                    array_expr = parse_atom()  # This will handle the array literal
+                    expect(OperatorToken(";"))
+                    next_stmt = parse_statements() if t.peek(None) is not None else None
+                    return Let(var, array_expr, next_stmt if next_stmt else Sequence([]))
                 
                 # Check for function call
                 if isinstance(t.peek(None), VarToken):
@@ -405,7 +485,8 @@ def parse(s: str) -> AST:
                 expect(OperatorToken(":"))
                 if not isinstance(t.peek(None), TypeToken):
                     raise ParseError("Expected parameter type")
-                param_type = next(t).t
+                param_token = next(t)
+                param_type = param_token.t + "[]" if param_token.is_array else param_token.t
 
                 expect(OperatorToken(")"))
 
@@ -585,8 +666,25 @@ def parse(s: str) -> AST:
                 expr = parse_expr()
                 expect(OperatorToken(")"))
                 return StrConversion(expr)
+            case ArrayToken(elements):
+                next(t)
+                return Array([Number(e.v) for e in elements])
             case VarToken(name):
                 next(t)
+                if isinstance(t.peek(None), OperatorToken) and t.peek().o == '[':
+                    next(t)  # consume [
+                    index = parse_expr()
+                    if not isinstance(t.peek(None), OperatorToken) or t.peek().o != ']':
+                        raise ParseError("Expected closing bracket ']'")
+                    next(t)  # consume ]
+                    
+                    if isinstance(t.peek(None), OperatorToken) and t.peek().o == '=':
+                        next(t)  # consume =
+                        value = parse_expr()
+                        return ArrayAssign(Var(name), index, value)
+                    return ArrayAccess(Var(name), index)
+                    
+                # ...rest of VarToken handling...
                 if t.peek(None) == OperatorToken("="):
                     # ... existing assignment handling ...
                     if t.peek(None) == OperatorToken("="):
@@ -612,6 +710,36 @@ def parse(s: str) -> AST:
                     # Don't consume semicolon here, let the statement level handle it
                     return Call(name, arg)
                 return Var(name)
+            case OperatorToken('['):
+                next(t)  # consume opening bracket
+                elements = []
+                
+                # Handle empty array
+                if isinstance(t.peek(None), OperatorToken) and t.peek().o == ']':
+                    next(t)
+                    return Array([])
+                
+                # Parse first element
+                elements.append(parse_expr())
+                
+                # Parse remaining elements
+                while isinstance(t.peek(None), OperatorToken) and t.peek().o == ',':
+                    next(t)  # consume comma
+                    elements.append(parse_expr())
+                
+                if not isinstance(t.peek(None), OperatorToken) or t.peek().o != ']':
+                    raise ParseError("Expected ']' after array elements")
+                next(t)  # consume closing bracket
+                
+                return Array(elements)
+                
+            # ...rest of parse_atom cases...
+            case KeywordToken("len"):
+                next(t)
+                expect(OperatorToken("("))
+                expr = parse_expr()
+                expect(OperatorToken(")"))
+                return Length(expr)
             case OperatorToken('('):
                 next(t)
                 expr = parse_expr()  
@@ -628,4 +756,4 @@ def parse(s: str) -> AST:
             case _:
                 raise ParseError(f"Unexpected token: {t.peek(None)}")
 
-    return parse_stmt()  
+    return parse_stmt()

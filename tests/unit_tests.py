@@ -263,6 +263,84 @@ def run_tests():
             """,
             expected_output="x: 10, y: 20, z: 40"
         ),
+        # Array Creation and Access Tests
+        TestCase(
+            name="Array Creation and Access",
+            code="""
+            int[] arr = [1, 2, 3, 4, 5];
+            println(arr[0]);
+            println(arr[4]);
+            """,
+            expected_output="1\n5"
+        ),
+        TestCase(
+            name="Array Assignment",
+            code="""
+            int[] arr = [1, 2, 3];
+            arr[1] = 10;
+            println(arr[1]);
+            """,
+            expected_output="10"
+        ),
+        TestCase(
+            name="Array in Expressions",
+            code="""
+            int[] arr = [1, 2, 3];
+            println(arr[0] + arr[1] + arr[2]);
+            """,
+            expected_output="6"
+        ),
+        TestCase(
+            name="String Indexing",
+            code="""
+            string st = "Hello";
+            println(st[0]);
+            println(st[4]);
+            """,
+            expected_output="H\no"
+        ),
+        TestCase(
+            name="Array Length",
+            code="""
+            int[] arr = [1, 2, 3, 4, 5];
+            println(len(arr));
+            """,
+            expected_output="5"
+        ),
+        TestCase(
+            name="String Length",
+            code="""
+            string st = "Hello";
+            println(len(st));
+            """,
+            expected_output="5"
+        ),
+        TestCase(
+            name="Array in Function",
+            code="""
+            fun sumArray(arr: int[]) : int {
+                int sum = 0;
+                int i = 0;
+                while(i < len(arr)) {
+                    sum = sum + arr[i];
+                    i = i + 1;
+                }
+                return sum;
+            }
+            int[] numbers = [1, 2, 3, 4, 5];
+            println(sumArray(numbers));
+            """,
+            expected_output="15"
+        ),
+        TestCase(
+            name="Nested Array Operations",
+            code="""
+            int[] arr = [10, 20, 30];
+            arr[1] = arr[0] + arr[2];
+            println(arr[1]);
+            """,
+            expected_output="40"
+        )
     ]
 
     # Run all tests and print summary
