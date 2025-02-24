@@ -38,6 +38,7 @@ class Let(AST):
     var: str
     expr: AST
     body: AST
+    var_type: str = None  # Add var_type field with default None
 
 @dataclass
 class Sequence(AST):
@@ -168,7 +169,10 @@ def check_type(value, expected_type):
             raise TypeError(f"Type mismatch: expected {expected_type} but got {type(value).__name__}")
         if base_type == "int":
             if not all(isinstance(x, int) for x in value):
-                raise TypeError(f"Type mismatch: array elements must be {base_type}")
+                raise TypeError(f"Array elements must be {base_type}")
+        elif base_type == "string":
+            if not all(isinstance(x, str) for x in value):
+                raise TypeError(f"Array elements must be {base_type}")
         return value
     
     if expected_type == "any":  # Special case for len() function
@@ -320,7 +324,19 @@ def e(tree: AST, env=None) -> int | bool | str | list:
         case Break():
             raise BreakLoop()
         case Array(elements):
-            return [e(elem, env) for elem in elements]
+            # Get array type from context if available
+            array_type = None
+            if isinstance(tree.parent, Let):
+                array_type = tree.parent.var_type  # You'll need to add var_type to Let
+            values = [e(elem, env) for elem in elements]
+            # Type check array elements
+            if array_type:
+                base_type = array_type.split('[')[0].strip()
+                if base_type == "int" and not all(isinstance(x, int) for x in values):
+                    raise TypeError("Array elements must be int")
+                elif base_type == "string" and not all(isinstance(x, str) for x in values):
+                    raise TypeError("Array elements must be string")
+            return values
         case ArrayAccess(array, index):
             arr = e(array, env)
             idx = e(index, env)
@@ -333,6 +349,24 @@ def e(tree: AST, env=None) -> int | bool | str | list:
             arr = e(array, env)
             idx = e(index, env)
             val = e(value, env)
+            
+            # Find array type from environment
+            array_name = array.name if isinstance(array, Var) else None
+            if array_name:
+                for var, stored_val in reversed(env):
+                    if var == array_name:
+                        # Check element type
+                        if isinstance(stored_val, list):
+                            if stored_val and isinstance(stored_val[0], int):
+                                if not isinstance(val, int):
+                                    raise TypeError("Cannot assign non-int to int[]")
+                            elif stored_val and isinstance(stored_val[0], str):
+                                if not isinstance(val, str):
+                                    raise TypeError("Cannot assign non-string to string[]")
+                        break
+
+            if not isinstance(idx, int):
+                raise TypeError("Array index must be integer")
             if isinstance(arr, list):
                 if 0 <= idx < len(arr):
                     arr[idx] = val
@@ -439,20 +473,23 @@ def parse(s: str) -> AST:
     def parse_stmt():
         match t.peek(None):
             case TypeToken(typ, is_array):
-                next(t)  # consume type token
+                next(t)
                 if not isinstance(t.peek(None), VarToken):
                     raise ParseError(f"Expected variable name after {typ}")
                 var = next(t).v
+                var_type = f"{typ}[]" if is_array else typ
                 expect(OperatorToken("="))
                 
                 if is_array:
-                    # Handle array initialization
                     if not isinstance(t.peek(None), OperatorToken) or t.peek().o != '[':
                         raise ParseError(f"Expected array literal after {var}")
-                    array_expr = parse_atom()  # This will handle the array literal
+                    array_expr = parse_atom()
+                    let_node = Let(var, array_expr, None, var_type)
+                    array_expr.parent = let_node
                     expect(OperatorToken(";"))
                     next_stmt = parse_statements() if t.peek(None) is not None else None
-                    return Let(var, array_expr, next_stmt if next_stmt else Sequence([]))
+                    let_node.body = next_stmt if next_stmt else Sequence([])
+                    return let_node
                 
                 # Check for function call
                 if isinstance(t.peek(None), VarToken):
