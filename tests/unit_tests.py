@@ -340,7 +340,53 @@ def run_tests():
             println(arr[1]);
             """,
             expected_output="40"
-        )
+        ),
+
+        # String Array Tests
+        TestCase(
+            name="String Array Creation and Access",
+            code="""
+            string[] words = ["hello", "world", "!"];
+            println(words[0] ++ words[1] ++ words[2]);
+            """,
+            expected_output="helloworld!"
+        ),
+        TestCase(
+            name="String Array Assignment",
+            code="""
+            string[] greetings = ["hi", "hello", "hey"];
+            greetings[1] = "HELLO";
+            println(greetings[1]);
+            """,
+            expected_output="HELLO"
+        ),
+        TestCase(
+            name="String Array in Function",
+            code="""
+            fun joinWords(words: string[]) : string {
+                string result = "";
+                int i = 0;
+                while(i < len(words)) {
+                    result = result ++ words[i];
+                    i = i + 1;
+                }
+                return result;
+            }
+            string[] arr = ["a", "b", "c"];
+            println(joinWords(arr));
+            """,
+            expected_output="abc"
+        ),
+        TestCase(
+            name="Mixed Array Operations",
+            code="""
+            string[] words = ["count:", "sum:"];
+            int[] nums = [1, 2, 3];
+            println(words[0] ++ str(len(nums)));
+            println(words[1] ++ str(nums[0] + nums[1] + nums[2]));
+            """,
+            expected_output="count:3\nsum:6"
+        ),
     ]
 
     # Run all tests and print summary

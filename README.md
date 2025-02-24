@@ -13,8 +13,11 @@
 ### Type System
 * Static type checking
 * Basic types: `int`, `string`, `bool`
+* Array types: `int[]`, `string[]`
 * Type annotations for function parameters and return types
 * Explicit type conversion using `str()`
+* Array and string indexing
+* Built-in `len()` function for arrays and strings
 
 ### Operations
 * Arithmetic: `+`, `-`, `*`, `/`, `%`, `**` (power)
@@ -104,6 +107,36 @@ fun process(x : int) : int {
 }
 ```
 
+### Arrays and Indexing
+```python
+# Array Declaration and Initialization
+int[] numbers = [1, 2, 3, 4, 5];
+string[] words = ["hello", "world"];
+
+# Array Indexing
+println(numbers[0]);      # Access first element
+numbers[1] = 10;         # Modify element
+
+# String Indexing
+string text = "Hello";
+println(text[0]);        # Prints "H"
+
+# Array Length
+println(len(numbers));   # Prints 5
+println(len(text));      # Prints 5
+
+# Array in Functions
+fun sumArray(arr: int[]) : int {
+    int sum = 0;
+    int i = 0;
+    while(i < len(arr)) {
+        sum = sum + arr[i];
+        i = i + 1;
+    }
+    return sum;
+}
+```
+
 ## Type Rules
 
 ### String Operations
@@ -120,6 +153,29 @@ Example:
 # Incorrect
 "Error: " ++ 404             # Type Error
 "Code" ++ true              # Type Error
+```
+
+### Array Type Rules
+* Arrays must be initialized with elements of the correct type
+* Array indices must be integers
+* Array access is bounds-checked at runtime
+* Arrays can be passed to and returned from functions
+* Arrays maintain their type information (e.g., `int[]`)
+
+Example:
+```python
+# Correct array usage
+int[] arr = [1, 2, 3];
+arr[0] = 42;                # Works
+println(arr[1]);           # Works
+
+# Type errors
+int[] nums = ["hello"];    # Error: Array elements must be int
+arr[1] = "string";         # Error: Cannot assign string to int[]
+arr["index"];              # Error: Array index must be int
+
+# Bounds checking
+arr[5];                    # Runtime error: Index out of bounds
 ```
 
 ### Function Type Checking
