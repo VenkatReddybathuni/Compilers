@@ -420,3 +420,132 @@ python3 -m tests.error_tests.py
 ```bash
 python3 tests.py          # Run all test cases
 ```
+
+# Bytecode Compilation Implementation
+
+## Overview
+The language supports compilation to bytecode, providing a bridge between interpretation and native machine code. The bytecode implementation offers several advantages:
+
+- **Performance**: Faster execution than pure interpretation
+- **Portability**: Same bytecode runs on any platform with our VM
+- **Low-level Control**: Enables optimization techniques
+- **Debugging**: Clearer insight into code execution
+
+## Bytecode Architecture
+
+### Core Components
+The bytecode system consists of three main components:
+
+1. **BytecodeCompiler**: Transforms AST into bytecode instructions
+2. **BytecodeVM**: Executes the bytecode instructions
+3. **Instruction Set**: Stack-based operations for computation
+
+### Stack-Based Virtual Machine
+Our VM uses a stack-based architecture similar to Java's JVM and Python's CPython VM:
+
+- Operations pop operands from the stack and push results back
+- Variables are stored in a separate variables array
+- Constants are stored in a constant pool
+- Control flow managed through labels and jumps
+
+## Instruction Set
+
+### Stack Operations
+- `LOAD_CONST <idx>`: Push constant from pool onto stack
+- `LOAD_VAR <idx>`: Push variable value onto stack
+- `STORE_VAR <idx>`: Store value from stack into variable
+- `POP_TOP`: Discard the top value from stack
+
+### Arithmetic Operations
+- `BINARY_ADD`: Add top two stack values
+- `BINARY_SUB`: Subtract top value from second value
+- `BINARY_MUL`: Multiply top two stack values
+- `BINARY_DIV`: Integer division
+- `BINARY_MOD`: Modulo operation
+- `BINARY_POWER`: Power operation (x^y)
+
+### String Operations
+- `BINARY_CONCAT`: String concatenation
+- `STR_CONVERT`: Convert top of stack to string
+
+### Control Flow
+- `JUMP <label>`: Unconditional jump to label
+- `JUMP_IF_FALSE <label>`: Jump if top of stack is false
+- `LABEL <label>`: Define a jump target
+
+### Array Operations
+- `CREATE_ARRAY <size>`: Create array from elements on stack
+- `LOAD_ARRAY_ITEM`: Load item from array at index
+- `STORE_ARRAY_ITEM`: Store item to array at index
+- `GET_LENGTH`: Get length of array or string
+
+### Comparison Operations
+- `BINARY_LT`: Less than
+- `BINARY_GT`: Greater than
+- `BINARY_LE`: Less than or equal
+- `BINARY_GE`: Greater than or equal
+- `BINARY_EQ`: Equal
+- `BINARY_NE`: Not equal
+
+### Logical Operations
+- `BINARY_AND`: Logical AND
+- `BINARY_OR`: Logical OR
+
+### I/O Operations
+- `PRINT`: Print top of stack
+
+## Compilation Process
+
+### AST to Bytecode Translation
+Each AST node type is compiled to a sequence of bytecode instructions:
+
+1. **Literals**: Compiled to `LOAD_CONST`
+2. **Variables**: Compiled to `LOAD_VAR`/`STORE_VAR`
+3. **Operators**: Compiled to respective binary operations
+4. **Control Flow**: Compiled to conditional jumps and labels
+5. **Functions**: Compiled to parameter setup and jumps
+
+### Type Information
+Type information is preserved during compilation:
+
+- Function parameters and return types
+- Array element types
+- String operations
+
+### Memory Management
+The bytecode VM manages:
+
+- **Stack**: For temporary values during computation
+- **Variables**: For named storage
+- **Constants**: For literals (numbers, strings)
+- **Labels**: For control flow targets
+
+## Example: Bytecode Compilation
+
+### Source Code
+```python
+fun add(x : int, y : int) : int {
+    return x + y;
+}
+
+fun main() : int {
+    int a = 10;
+    int b = 20;
+    return add(a, b);
+}
+```
+
+### Bytecode
+```
+LOAD_CONST 10
+STORE_VAR 0
+LOAD_CONST 20
+STORE_VAR 1
+LOAD_VAR 0
+LOAD_VAR 1
+CALL add
+RETURN
+```
+
+### Execution
+The bytecode is executed by the VM, which manages the stack, variables, and control flow according to the instructions.

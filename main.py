@@ -134,6 +134,12 @@ class TypeToken(Token):
 class ArrayToken(Token):
     elements: list[Token]
 
+@dataclass
+class Slice(AST):
+    sequence: AST
+    start: AST
+    end: AST
+
 class ReturnValue(Exception):
     def __init__(self, value):
         self.value = value
@@ -378,6 +384,13 @@ def e(tree: AST, env=None) -> int | bool | str | list:
             if isinstance(val, (list, str)):
                 return len(val)
             raise TypeError(f"Cannot get length of {type(val).__name__}")
+        case Slice(sequence, start, end):
+            seq = e(sequence, env)
+            start_idx = e(start, env)
+            end_idx = e(end, env)
+            if isinstance(seq, (list, str)):
+                return seq[start_idx:end_idx]
+            raise TypeError(f"Cannot slice {type(seq).__name__}")
 
 def lex(s: str) -> Iterator[Token]:
     i = 0
@@ -441,8 +454,10 @@ class ParseError(Exception):
 
 def parse(s: str) -> AST:
     from more_itertools import peekable
-    t = peekable(lex(s))
-
+    tokens = list(lex(s))
+    print(tokens)
+    t = peekable(tokens)
+    # print(lex(s))
     def expect(what: Token):
         if t.peek(None) == what:
             next(t)
@@ -471,6 +486,7 @@ def parse(s: str) -> AST:
             return Number("0")  # Empty block returns 0
 
     def parse_stmt():
+        # print(f"parse_stmt: {t.peek(None)}")  # Debugging statement
         match t.peek(None):
             case TypeToken(typ, is_array):
                 next(t)
@@ -481,9 +497,19 @@ def parse(s: str) -> AST:
                 expect(OperatorToken("="))
                 
                 if is_array:
-                    if not isinstance(t.peek(None), OperatorToken) or t.peek().o != '[':
-                        raise ParseError(f"Expected array literal after {var}")
-                    array_expr = parse_atom()
+                    if isinstance(t.peek(None), VarToken):
+                        array_name = next(t).v
+                        expect(OperatorToken("["))
+                        start = parse_expr()
+                        expect(OperatorToken(":"))
+                        end = parse_expr()
+                        expect(OperatorToken("]"))
+                        array_expr = Slice(Var(array_name), start, end)
+                    elif isinstance(t.peek(None), OperatorToken) and t.peek().o == '[':
+                        array_expr = parse_atom()
+                    else:
+                        raise ParseError(f"Expected array literal or slice after {var}")
+                    
                     let_node = Let(var, array_expr, None, var_type)
                     array_expr.parent = let_node
                     expect(OperatorToken(";"))
@@ -673,6 +699,7 @@ def parse(s: str) -> AST:
                     return ast
 
     def parse_atom():
+        # print(f"parse_atom: {t.peek(None)}")  # Debugging statement
         match t.peek(None):
             case OperatorToken('{'):
                 next(t)  # consume opening brace
@@ -711,40 +738,21 @@ def parse(s: str) -> AST:
                 if isinstance(t.peek(None), OperatorToken) and t.peek().o == '[':
                     next(t)  # consume [
                     index = parse_expr()
-                    if not isinstance(t.peek(None), OperatorToken) or t.peek().o != ']':
-                        raise ParseError("Expected closing bracket ']'")
-                    next(t)  # consume ]
-                    
+                    if isinstance(t.peek(None), OperatorToken) and t.peek().o == ':':
+                        next(t)  # consume :
+                        end = parse_expr()
+                        expect(OperatorToken(']'))
+                        return Slice(Var(name), index, end)
+                    expect(OperatorToken(']'))
                     if isinstance(t.peek(None), OperatorToken) and t.peek().o == '=':
                         next(t)  # consume =
                         value = parse_expr()
                         return ArrayAssign(Var(name), index, value)
                     return ArrayAccess(Var(name), index)
-                    
-                # ...rest of VarToken handling...
-                if t.peek(None) == OperatorToken("="):
-                    # ... existing assignment handling ...
-                    if t.peek(None) == OperatorToken("="):
-                        next(t)
-                        # Check for function call
-                        if isinstance(t.peek(None), VarToken):
-                            func_name = next(t).v
-                            if t.peek(None) == OperatorToken("("):
-                                next(t)
-                                arg = parse_expr()
-                                expect(OperatorToken(")"))
-                                expect(OperatorToken(";"))
-                                return Let(name, Call(func_name, arg), Sequence([]))
-                            t.prepend(VarToken(func_name))  # Put back the token if not a function call
-                        # Handle normal expression assignment
-                        expr = parse_expr()
-                        expect(OperatorToken(";"))
-                        return Let(name, expr, Sequence([]))
-                elif t.peek(None) == OperatorToken("("):
+                elif isinstance(t.peek(None), OperatorToken) and t.peek().o == '(':
                     next(t)
                     arg = parse_expr()
                     expect(OperatorToken(")"))
-                    # Don't consume semicolon here, let the statement level handle it
                     return Call(name, arg)
                 return Var(name)
             case OperatorToken('['):
@@ -794,3 +802,524 @@ def parse(s: str) -> AST:
                 raise ParseError(f"Unexpected token: {t.peek(None)}")
 
     return parse_stmt()
+
+# Add a new Bytecode class for compilation
+@dataclass
+class BytecodeInstruction:
+    opcode: str
+    args: list = None
+
+class BytecodeCompiler:
+    def __init__(self):
+        self.instructions = []
+        self.constants = []
+        self.variables = {}
+        self.labels = {}
+        self.next_label = 0
+        self.current_stack_size = 0
+        self.max_stack_size = 0
+
+    def get_label(self):
+        """Generate a new unique label"""
+        label = f"L{self.next_label}"
+        self.next_label += 1
+        return label
+
+    def emit(self, opcode, *args):
+        """Add an instruction to the bytecode sequence"""
+        self.instructions.append(BytecodeInstruction(opcode, list(args)))
+        
+        # Update stack size tracking
+        if opcode in ['LOAD_CONST', 'LOAD_VAR', 'LOAD_GLOBAL']:
+            self.current_stack_size += 1
+        elif opcode in ['STORE_VAR', 'POP_TOP']:
+            self.current_stack_size -= 1
+        elif opcode in ['BINARY_ADD', 'BINARY_SUB', 'BINARY_MUL', 'BINARY_DIV',
+                       'BINARY_MOD', 'BINARY_POWER', 'BINARY_CONCAT']:
+            self.current_stack_size -= 1  # Two operands pop, one result push
+        
+        self.max_stack_size = max(self.max_stack_size, self.current_stack_size)
+        
+        return len(self.instructions) - 1
+
+    def add_constant(self, value):
+        """Add a constant to the constant pool"""
+        if value not in self.constants:
+            self.constants.append(value)
+        return self.constants.index(value)
+
+    def compile(self, ast):
+        """Compile an AST into bytecode"""
+        self._compile_node(ast)
+        return {
+            'instructions': self.instructions,
+            'constants': self.constants,
+            'variables': self.variables,
+            'max_stack': self.max_stack_size
+        }
+
+    def _compile_node(self, node):
+        """Recursively compile a node in the AST"""
+        if node is None:
+            return
+            
+        match node:
+            case Number(val):
+                const_idx = self.add_constant(int(val))
+                self.emit("LOAD_CONST", const_idx)
+            
+            case String(val):
+                const_idx = self.add_constant(val)
+                self.emit("LOAD_CONST", const_idx)
+            
+            case BinOp(op, left, right):
+                # Special handling for precedence in complex expressions
+                if op == '*' and isinstance(left, BinOp) and left.op in ['+', '-']:
+                    # First compute the right operand
+                    self._compile_node(right)
+                    # Then compute the left operand parts
+                    self._compile_node(left.left)
+                    self._compile_node(left.right)
+                    # Apply the appropriate operations in the correct order
+                    self.emit({'+': "BINARY_ADD", '-': "BINARY_SUB"}[left.op])
+                    self.emit("BINARY_MUL")
+                else:
+                    # Normal compilation order for other expressions
+                    self._compile_node(left)
+                    self._compile_node(right)
+                    
+                    # Map operators to bytecode operations
+                    op_map = {
+                        "+": "BINARY_ADD",
+                        "-": "BINARY_SUB",
+                        "*": "BINARY_MUL",
+                        "/": "BINARY_DIV",
+                        "%": "BINARY_MOD",
+                        "**": "BINARY_POWER",
+                        "++": "BINARY_CONCAT",
+                        "<": "BINARY_LT",
+                        ">": "BINARY_GT",
+                        "<=": "BINARY_LE",
+                        ">=": "BINARY_GE",
+                        "==": "BINARY_EQ",
+                        "!=": "BINARY_NE",
+                        "and": "BINARY_AND",
+                        "or": "BINARY_OR"
+                    }
+                    self.emit(op_map[op])
+            
+            case Var(name):
+                if name not in self.variables:
+                    self.variables[name] = len(self.variables)
+                self.emit("LOAD_VAR", self.variables[name])
+            
+            case Assign(name, expr):
+                self._compile_node(expr)
+                if name not in self.variables:
+                    self.variables[name] = len(self.variables)
+                self.emit("STORE_VAR", self.variables[name])
+            
+            case Let(var, expr, body, _):
+                self._compile_node(expr)
+                if var not in self.variables:
+                    self.variables[var] = len(self.variables)
+                self.emit("STORE_VAR", self.variables[var])
+                self._compile_node(body)
+            
+            case If(cond, then, else_):
+                else_label = self.get_label()
+                end_label = self.get_label()
+                
+                # Compile condition
+                self._compile_node(cond)
+                self.emit("JUMP_IF_FALSE", else_label)
+                
+                # Compile then branch
+                self._compile_node(then)
+                self.emit("JUMP", end_label)
+                
+                # Compile else branch
+                self.emit("LABEL", else_label)
+                self._compile_node(else_)
+                
+                # End of if-else
+                self.emit("LABEL", end_label)
+            
+            case While(cond, body):
+                start_label = self.get_label()
+                end_label = self.get_label()
+                
+                self.emit("LABEL", start_label)
+                self._compile_node(cond)
+                self.emit("JUMP_IF_FALSE", end_label)
+                self._compile_node(body)
+                self.emit("JUMP", start_label)
+                self.emit("LABEL", end_label)
+            
+            case PrintLn(expr):
+                self._compile_node(expr)
+                self.emit("PRINT")
+            
+            case StrConversion(expr):
+                self._compile_node(expr)
+                self.emit("STR_CONVERT")
+            
+            case Sequence(statements):
+                for i, stmt in enumerate(statements):
+                    self._compile_node(stmt)
+                    # Add POP_TOP if the statement produces a value that's not used
+                    # and it's not the last statement in a sequence
+                    if i < len(statements) - 1 and not isinstance(stmt, (Assign, Let, If, While, PrintLn)):
+                        self.emit("POP_TOP")
+            
+            case _:
+                raise NotImplementedError(f"Bytecode compilation not implemented for {type(node)}")
+
+# Define a BytecodeVM class to execute compiled bytecode
+class BytecodeVM:
+    def __init__(self, bytecode):
+        self.instructions = bytecode['instructions']
+        self.constants = bytecode['constants']
+        self.variables = [None] * max(len(bytecode['variables']), 1)
+        self.stack = []
+        self.ip = 0  # Instruction pointer
+        
+    def run(self):
+        result = None
+        try:
+            while self.ip < len(self.instructions):
+                instruction = self.instructions[self.ip]
+                self.ip += 1
+                
+                opcode = instruction.opcode
+                args = instruction.args if instruction.args else []
+                
+                if opcode == "LOAD_CONST":
+                    self.stack.append(self.constants[args[0]])
+                
+                elif opcode == "LOAD_VAR":
+                    var_idx = args[0]
+                    if var_idx >= len(self.variables) or self.variables[var_idx] is None:
+                        raise ValueError(f"Variable at index {var_idx} not initialized")
+                    self.stack.append(self.variables[var_idx])
+                
+                elif opcode == "STORE_VAR":
+                    var_idx = args[0]
+                    if var_idx >= len(self.variables):
+                        # Expand variables array if needed
+                        self.variables.extend([None] * (var_idx - len(self.variables) + 1))
+                    self.variables[var_idx] = self.stack.pop()
+                
+                elif opcode == "BINARY_ADD":
+                    right = self.stack.pop()
+                    left = self.stack.pop()
+                    self.stack.append(left + right)
+                
+                elif opcode == "BINARY_SUB":
+                    right = self.stack.pop()
+                    left = self.stack.pop()
+                    self.stack.append(left - right)
+                
+                elif opcode == "BINARY_MUL":
+                    right = self.stack.pop()
+                    left = self.stack.pop()
+                    self.stack.append(left * right)
+                
+                elif opcode == "BINARY_DIV":
+                    right = self.stack.pop()
+                    left = self.stack.pop()
+                    self.stack.append(left // right)
+                
+                elif opcode == "BINARY_MOD":
+                    right = self.stack.pop()
+                    left = self.stack.pop()
+                    self.stack.append(left % right)
+                
+                elif opcode == "BINARY_POWER":
+                    right = self.stack.pop()
+                    left = self.stack.pop()
+                    self.stack.append(left ** right)
+                
+                elif opcode == "BINARY_CONCAT":
+                    right = self.stack.pop()
+                    left = self.stack.pop()
+                    # String concatenation with type checking
+                    if not isinstance(left, str) or not isinstance(right, str):
+                        raise TypeError(f"Cannot concatenate {type(left).__name__} with {type(right).__name__}")
+                    self.stack.append(left + right)
+                
+                elif opcode == "BINARY_LT":
+                    right = self.stack.pop()
+                    left = self.stack.pop()
+                    self.stack.append(left < right)
+                
+                elif opcode == "BINARY_GT":
+                    right = self.stack.pop()
+                    left = self.stack.pop()
+                    self.stack.append(left > right)
+                
+                elif opcode == "BINARY_LE":
+                    right = self.stack.pop()
+                    left = self.stack.pop()
+                    self.stack.append(left <= right)
+                
+                elif opcode == "BINARY_GE":
+                    right = self.stack.pop()
+                    left = self.stack.pop()
+                    self.stack.append(left >= right)
+                
+                elif opcode == "BINARY_EQ":
+                    right = self.stack.pop()
+                    left = self.stack.pop()
+                    self.stack.append(left == right)
+                
+                elif opcode == "BINARY_NE":
+                    right = self.stack.pop()
+                    left = self.stack.pop()
+                    self.stack.append(left != right)
+                
+                elif opcode == "BINARY_AND":
+                    right = self.stack.pop()
+                    left = self.stack.pop()
+                    self.stack.append(left and right)
+                
+                elif opcode == "BINARY_OR":
+                    right = self.stack.pop()
+                    left = self.stack.pop()
+                    self.stack.append(left or right)
+                
+                elif opcode == "STR_CONVERT":
+                    value = self.stack.pop()
+                    self.stack.append(str(value))
+                
+                elif opcode == "PRINT":
+                    value = self.stack.pop()
+                    print(value)
+                    result = value
+                
+                elif opcode == "POP_TOP":
+                    self.stack.pop()
+                
+                elif opcode == "JUMP":
+                    # Find the label index before updating IP
+                    label_idx = self._find_label(args[0])
+                    self.ip = label_idx
+                
+                elif opcode == "JUMP_IF_FALSE":
+                    condition = self.stack.pop()
+                    if not condition:
+                        # Find the label index before updating IP
+                        label_idx = self._find_label(args[0])
+                        self.ip = label_idx
+                
+                elif opcode == "LABEL":
+                    # Labels are just markers, no operation needed
+                    pass
+                
+                elif opcode == "LOAD_ARRAY_ITEM":
+                    idx = self.stack.pop()
+                    arr = self.stack.pop()
+                    if not isinstance(arr, (list, str)):
+                        raise TypeError(f"Cannot index into {type(arr).__name__}")
+                    if not isinstance(idx, int):
+                        raise TypeError("Array index must be integer")
+                    if idx < 0 or idx >= len(arr):
+                        raise IndexError("Array index out of bounds")
+                    self.stack.append(arr[idx])
+                
+                elif opcode == "STORE_ARRAY_ITEM":
+                    value = self.stack.pop()
+                    idx = self.stack.pop()
+                    arr = self.stack.pop()
+                    if not isinstance(arr, list):
+                        raise TypeError(f"Cannot assign to {type(arr).__name__}")
+                    if not isinstance(idx, int):
+                        raise TypeError("Array index must be integer")
+                    if idx < 0 or idx >= len(arr):
+                        raise IndexError("Array index out of bounds")
+                    arr[idx] = value
+                    self.stack.append(value)
+                
+                elif opcode == "CREATE_ARRAY":
+                    size = args[0]
+                    elements = []
+                    for _ in range(size):
+                        elements.insert(0, self.stack.pop())
+                    self.stack.append(elements)
+                
+                elif opcode == "GET_LENGTH":
+                    obj = self.stack.pop()
+                    if not isinstance(obj, (list, str)):
+                        raise TypeError(f"Cannot get length of {type(obj).__name__}")
+                    self.stack.append(len(obj))
+                
+                elif opcode == "SLICE":
+                    end_idx = self.stack.pop()
+                    start_idx = self.stack.pop()
+                    seq = self.stack.pop()
+                    if not isinstance(seq, (list, str)):
+                        raise TypeError(f"Cannot slice {type(seq).__name__}")
+                    self.stack.append(seq[start_idx:end_idx])
+                
+                else:
+                    raise ValueError(f"Unknown opcode: {opcode}")
+            
+            # Return the last value on the stack, if any
+            return result if not self.stack else self.stack[-1]
+                
+        except Exception as e:
+            print(f"VM Error at instruction {self.ip-1}: {opcode} {args}")
+            print(f"Stack: {self.stack}")
+            print(f"Variables: {self.variables}")
+            raise
+            
+    def _find_label(self, label):
+        """Find the index of a label in the instruction sequence"""
+        for i, instr in enumerate(self.instructions):
+            if instr.opcode == "LABEL" and instr.args[0] == label:
+                return i
+        raise ValueError(f"Label not found: {label}")
+
+# Add additional bytecode-related methods to compiler
+def _compile_array(self, node):
+    """Compile array creation"""
+    for element in node.elements:
+        self._compile_node(element)
+    self.emit("CREATE_ARRAY", len(node.elements))
+
+def _compile_array_access(self, node):
+    """Compile array access expression"""
+    self._compile_node(node.array)
+    self._compile_node(node.index)
+    self.emit("LOAD_ARRAY_ITEM")
+
+def _compile_array_assign(self, node):
+    """Compile array element assignment"""
+    self._compile_node(node.array)
+    self._compile_node(node.index)
+    self._compile_node(node.value)
+    self.emit("STORE_ARRAY_ITEM")
+
+def _compile_length(self, node):
+    """Compile length function call"""
+    self._compile_node(node.expr)
+    self.emit("GET_LENGTH")
+
+def _compile_slice(self, node):
+    """Compile array slicing"""
+    self._compile_node(node.sequence)
+    self._compile_node(node.start)
+    self._compile_node(node.end)
+    self.emit("SLICE")
+
+BytecodeCompiler._compile_slice = _compile_slice
+
+# Update the BytecodeCompiler._compile_node method to handle these node types
+BytecodeCompiler._compile_array = _compile_array
+BytecodeCompiler._compile_array_access = _compile_array_access
+BytecodeCompiler._compile_array_assign = _compile_array_assign
+BytecodeCompiler._compile_length = _compile_length
+
+# Add these cases to the _compile_node method's match statement
+original_compile_node = BytecodeCompiler._compile_node
+
+def enhanced_compile_node(self, node):
+    if node is None:
+        return
+    
+    match node:
+        case Array(elements):
+            self._compile_array(node)
+        case ArrayAccess(array, index):
+            self._compile_array_access(node)
+        case ArrayAssign(array, index, value):
+            self._compile_array_assign(node)
+        case Length(expr):
+            self._compile_length(node)
+        case Slice(sequence, start, end):
+            self._compile_slice(node)
+        case _:
+            original_compile_node(self, node)
+
+BytecodeCompiler._compile_node = enhanced_compile_node
+
+# Add compilation function to our interpreter
+def compile_and_run(ast, env=None):
+    """Compile AST to bytecode and run it with the VM"""
+    compiler = BytecodeCompiler()
+    bytecode = compiler.compile(ast)
+    
+    # Initialize variables from environment
+    if env:
+        for var_name, value in env:
+            if var_name in compiler.variables:
+                var_idx = compiler.variables[var_name]
+                # Initialize VM variables
+                while len(bytecode['variables']) <= var_idx:
+                    bytecode['variables'][var_idx] = None
+                bytecode['variables'][var_idx] = value
+    
+    vm = BytecodeVM(bytecode)
+    return vm.run()
+
+# def test_slice_array():
+code = """
+int[] arr = [1, 2, 3, 4, 5];
+int[] sliced = arr[1:4];
+println(sliced);
+"""
+
+code2 = """
+string s = "hello world";
+string sliced = s[1:4];
+println(sliced);
+"""
+
+
+ast = parse(code2)
+print(e(ast))
+
+
+# def run_test_case(code, expected_output):
+#     from io import StringIO
+#     import sys
+#     print("yes")
+#     # Redirect stdout to capture print statements
+#     old_stdout = sys.stdout
+#     sys.stdout = StringIO()
+    
+#     try:
+#         print("2")
+#         ast = parse(code)
+#        
+#         e(ast)
+#         actual_output = sys.stdout.getvalue().strip()
+#         print(f"Expected: {expected_output}, Got: {actual_output}")
+#         assert actual_output == expected_output, f"Expected: {expected_output}, Got: {actual_output}"
+#         return "Test passed"
+#     except Exception as ex:
+#         return f"Test failed: {ex}"
+#     finally:
+#         sys.stdout = old_stdout
+
+# test_slice_array()
+# Modify the main entry point to support interpretation or compilation
+# if __name__ == "__main__":
+#     import sys
+#     if len(sys.argv) > 1:
+#         filename = sys.argv[1]
+#         mode = sys.argv[2] if len(sys.argv) > 2 else "interpret"
+        
+#         with open(filename, 'r') as f:
+#             code = f.read()
+        
+#         ast = parse(code)
+#         if mode == "compile":
+#             # Compile and run with bytecode VM
+#             compile_and_run(ast)
+#         else:
+#             # Use the interpreter
+#             e(ast)
+#     else:
+#         from tests.unit_tests import run_tests
+#         run_tests()
