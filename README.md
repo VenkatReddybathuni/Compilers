@@ -137,6 +137,20 @@ fun sumArray(arr: int[]) : int {
 }
 ```
 
+### Array Slicing
+```python
+int[] numbers = [1, 2, 3, 4, 5];
+int[] slicedNumbers = numbers[1:4];  # Slices the array from index 1 to 3
+println(slicedNumbers[0]);           # Prints 2
+println(slicedNumbers[1]);           # Prints 3
+println(slicedNumbers[2]);           # Prints 4
+
+# String Slicing
+string text = "hello world";
+string slicedText = text[1:5];       # Slices the string from index 1 to 4
+println(slicedText);                 # Prints "ello"
+```
+
 ## Type Rules
 
 ### String Operations

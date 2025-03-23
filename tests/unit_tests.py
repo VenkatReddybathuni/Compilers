@@ -387,6 +387,26 @@ def run_tests():
             """,
             expected_output="count:3\nsum:6"
         ),
+        TestCase(
+            name="Array Slicing",
+            code="""
+            int[] arr = [1, 2, 3, 4, 5];
+            int[] sliced = arr[1:4];
+            println(sliced[0]);
+            println(sliced[1]);
+            println(sliced[2]);
+            """,
+            expected_output="2\n3\n4"
+        ),
+        TestCase(
+            name="String Slicing",
+            code="""
+            string s = "hello world";
+            string sliced = s[1:5];
+            println(sliced);
+            """,
+            expected_output="ello"
+        ),
     ]
 
     # Run all tests and print summary

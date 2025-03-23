@@ -455,7 +455,7 @@ class ParseError(Exception):
 def parse(s: str) -> AST:
     from more_itertools import peekable
     tokens = list(lex(s))
-    print(tokens)
+    # print(tokens)
     t = peekable(tokens)
     # print(lex(s))
     def expect(what: Token):
