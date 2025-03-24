@@ -102,6 +102,20 @@ class ArrayAssign(AST):
 class Length(AST):
     expr: AST
 
+@dataclass
+class Dict(AST):
+    pairs: list[tuple[AST, AST]]
+
+@dataclass
+class DictAccess(AST):
+    dict: AST
+    key: AST
+
+@dataclass
+class DictAssign(AST):
+    dict: AST
+    key: AST
+    value: AST
 class Token:
     pass
 
@@ -306,7 +320,10 @@ def e(tree: AST, env=None) -> int | bool | str | list:
             update_env(env, name, value)
             return value
         case Let(var, expr, body):
+            # print(var)
+            # print("expression",expr)
             value = e(expr, env)  
+            # print("value",value)
             update_env(env, var, value)  # Update or add variable
             return e(body, env) 
         case Return(expr):
@@ -391,6 +408,25 @@ def e(tree: AST, env=None) -> int | bool | str | list:
             if isinstance(seq, (list, str)):
                 return seq[start_idx:end_idx]
             raise TypeError(f"Cannot slice {type(seq).__name__}")
+        case Dict(pairs):
+            return {e(key, env): e(value, env) for key, value in pairs}
+        case DictAccess(dict, key):
+            d = e(dict, env)
+            k = e(key, env)
+            # print(d)
+            # print(f"Accessing key '{k}' in dict: {d}")
+            # if not isinstance(d, dict):
+            #     raise TypeError(f"Cannot access key in non-dict type {type(d).__name__}")
+            # print(f"Accessing key '{k}' in dict: {d}")
+            return d[k]
+        case DictAssign(dict, key, value):
+            d = e(dict, env)
+            k = e(key, env)
+            v = e(value, env)
+            # if not isinstance(d, dict):
+            #     raise TypeError(f"Cannot assign key in non-dict type {type(d).__name__}")
+            d[k] = v
+            return v
 
 def lex(s: str) -> Iterator[Token]:
     i = 0
@@ -407,14 +443,14 @@ def lex(s: str) -> Iterator[Token]:
             while i < len(s) and (s[i].isalpha() or s[i].isdigit()):  # Allow digits in identifiers
                 t = t + s[i]
                 i = i + 1
-                
+            # print(t)
             # Check if this is an array type (e.g. "int[]")
             is_array = False
             if i + 1 < len(s) and s[i] == '[' and s[i + 1] == ']':
                 is_array = True
                 i += 2
                 
-            if t in {"and", "or", "if", "else", "fun", "return", "println", "str", "while", "continue", "break"}:  # Added while, continue, break
+            if t in {"and", "or", "if", "else", "fun", "return", "println", "str", "while", "continue", "break", "dict"}:  # Added while, continue, break
                 yield KeywordToken(t)
             elif t in {"int", "float", "string", "void", "bool"}:  # Types are now handled separately
                 yield TypeToken(t, is_array)
@@ -471,6 +507,7 @@ def parse(s: str) -> AST:
                 break
 
             stmt = parse_stmt()
+            # print(stmt)
             statements.append(stmt)
 
             # Handle semicolons more carefully
@@ -526,7 +563,16 @@ def parse(s: str) -> AST:
                         expect(OperatorToken(")"))
                         expect(OperatorToken(";"))
                         return Let(var, Call(func_name, arg), Sequence([]))
+                    elif t.peek(None) == OperatorToken("{"):
+                        next(t)
+                        key = parse_expr()
+                        expect(OperatorToken("}"))
+                        expect(OperatorToken(";"))
+                        # print("key is ", key)
+                        # print("variable",func_name)
+                        return Let(var, DictAccess(Var(func_name), key), Sequence([]))
                     t.prepend(VarToken(func_name))  # Put back the token if not a function call
+
                 
                 expr = parse_expr()
                 expect(OperatorToken(";"))
@@ -565,6 +611,27 @@ def parse(s: str) -> AST:
                 # Continue parsing after function definition
                 rest = parse_statements() if t.peek(None) is not None else body
                 return Fun(name, param, param_type, return_type, body, rest)
+            case KeywordToken("dict"):
+                next(t)
+                if not isinstance(t.peek(None), VarToken):
+                    raise ParseError("Expected dictionary name")
+                name = next(t).v
+                expect(OperatorToken("="))
+                expect(OperatorToken("{"))
+                pairs = []
+                while t.peek(None) != OperatorToken("}"):
+                    key = parse_expr()
+                    expect(OperatorToken(":"))
+                    value = parse_expr()
+                    pairs.append((key, value))
+                    if t.peek(None) == OperatorToken(","):
+                        next(t)
+                expect(OperatorToken("}"))
+                expect(OperatorToken(";"))
+                # print(pairs)
+                rest = parse_statements() if t.peek(None) is not None else body
+                # print("rest",rest)
+                return Let(name, Dict(pairs), rest)      
             case KeywordToken("if"):
                 next(t)
                 expect(OperatorToken("("))  # Expect opening parenthesis
@@ -754,6 +821,15 @@ def parse(s: str) -> AST:
                     arg = parse_expr()
                     expect(OperatorToken(")"))
                     return Call(name, arg)
+                elif isinstance(t.peek(None), OperatorToken) and t.peek().o == '{':
+                    next(t)  # consume {
+                    key = parse_expr()
+                    expect(OperatorToken('}'))
+                    if isinstance(t.peek(None), OperatorToken) and t.peek().o == '=':
+                        next(t)  # consume =
+                        value = parse_expr()
+                        return DictAssign(Var(name), key, value)
+                    return DictAccess(Var(name), key)
                 return Var(name)
             case OperatorToken('['):
                 next(t)  # consume opening bracket
@@ -1266,17 +1342,25 @@ def compile_and_run(ast, env=None):
 code = """
 int[] arr = [1, 2, 3, 4, 5];
 int[] sliced = arr[1:4];
-println(sliced);
+int result = arr[2];
+println(result);
 """
 
-code2 = """
-string s = "hello world";
-string sliced = s[1:4];
-println(sliced);
-"""
+# code2 = """
+# fun add(a: int, b: int): int {
+#     return a + b;
+# }
+# dict d = {"sum": add(3, 4)};
+# int result = d{"sum"};
+# println(result);
+# """
 
-
-ast = parse(code2)
+# code3="""
+#             int[] arr = [10, 20, 30];
+#             arr[1] = arr[0] + arr[2];
+#             println(arr[1]);
+#             """
+ast = parse(code)
 print(e(ast))
 
 

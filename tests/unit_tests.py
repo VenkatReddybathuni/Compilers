@@ -407,6 +407,42 @@ def run_tests():
             """,
             expected_output="ello"
         ),
+         TestCase(
+            name="Dictionary Creation and Access",
+            code="""
+            dict d = {"name": "Alice", "age": 30, "city": "Wonderland"};
+            string name = d{"name"};
+            int age = d{"age"};
+            string city = d{"city"};
+            println(name);
+            println(age);
+            println(city);
+            """,
+            expected_output="Alice\n30\nWonderland"
+        ),
+        TestCase(
+            name="Dictionary Assignment",
+            code="""
+            dict d = {"a": 1, "b": 2};
+            d{"a"} = 10;
+            d{"b"} = 20;
+            int a = d{"a"};
+            int b = d{"b"};
+            println(a);
+            println(b);
+            """,
+            expected_output="10\n20"
+        ),
+        TestCase(
+            name="Dictionary Update and Access",
+            code="""
+            dict d = {"x": 5, "y": 10};
+            d{"x"} = d{"x"} + d{"y"};
+            int result = d{"x"};
+            println(result);
+            """,
+            expected_output="15"
+        ),
     ]
 
     # Run all tests and print summary
