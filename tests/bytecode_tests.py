@@ -3,7 +3,7 @@ import sys
 sys.path.append(str(Path(__file__).parent.parent))
 
 from main import parse, BytecodeCompiler, BytecodeVM
-from test_framework import capture_stdout 
+from tests.test_framework import capture_stdout 
 from io import StringIO
 
 def run_bytecode_test(code, expected_output=None, env=None):

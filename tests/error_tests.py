@@ -1,4 +1,4 @@
-from test_framework import TestCase, run_test_suite
+from tests.test_framework import TestCase, run_test_suite
 from main import TypeError, ParseError
 
 

@@ -212,8 +212,8 @@ def lookup(env, v):
     # Add built-in functions
     if v == "len":
         return ("x", "any", Length(Var("x")), "int")
-    
-    for u, uv in reversed(env):
+    env_reversed = reversed(env)
+    for u, uv in env_reversed:
         if u == v:
             return uv
     raise ValueError(f"Variable {v} not found")
@@ -243,6 +243,52 @@ def e(tree: AST, env=None) -> int | bool | str | list:
             # Store function definition with its type information
             env.append((f, (a, at, b, rt)))  # Store param name, param type, body, return type
             return e(c, env)
+        # case Call(f, x):
+        #     param, param_type, body, return_type = lookup(env, f)  # Get function definition with types
+        #     arg_value = e(x, env)
+
+        #     # Add explicit conversion for string parameters if needed
+        #     if param_type == "string" and isinstance(arg_value, int):
+        #         arg_value = str(arg_value)
+        #     elif param_type == "int" and isinstance(arg_value, str):
+        #         raise TypeError(f"Function '{f}' expects int but got string")
+
+        #     try:
+        #         check_type(arg_value, param_type)
+        #     except TypeError as te:
+        #         raise TypeError(f"Function '{f}' parameter type mismatch: {str(te)}")
+
+        #     call_env = env.copy()
+        #     call_env.append((param, arg_value))
+        #     try:
+        #         result = e(body, call_env)
+        #         return check_type(result, return_type)
+        #     except ReturnValue as rv:
+        #         return check_type(rv.value, return_type)
+        # case Call(f, x):
+        #     param, param_type, body, return_type = lookup(env, f)  # Get function definition with types
+        #     arg_value = e(x, env)
+
+        #     # Add explicit conversion for string parameters if needed
+        #     if param_type == "string" and isinstance(arg_value, int):
+        #         arg_value = str(arg_value)
+        #     elif param_type == "int" and isinstance(arg_value, str):
+        #         raise TypeError(f"Function '{f}' expects int but got string")
+
+        #     try:
+        #         check_type(arg_value, param_type)
+        #     except TypeError as te:
+        #         raise TypeError(f"Function '{f}' parameter type mismatch: {str(te)}")
+
+        #     # Create a new environment just for this function call
+        #     call_env = []  # Start with an empty environment
+        #     call_env.append((param, arg_value))  # Add parameter binding
+            
+        #     try:
+        #         result = e(body, call_env)
+        #         return check_type(result, return_type)
+        #     except ReturnValue as rv:
+        #         return check_type(rv.value, return_type)
         case Call(f, x):
             param, param_type, body, return_type = lookup(env, f)  # Get function definition with types
             arg_value = e(x, env)
@@ -258,8 +304,12 @@ def e(tree: AST, env=None) -> int | bool | str | list:
             except TypeError as te:
                 raise TypeError(f"Function '{f}' parameter type mismatch: {str(te)}")
 
-            call_env = env.copy()
-            call_env.append((param, arg_value))
+            # Create function environment with access to outer scope
+            call_env = env.copy()  # Copy the outer environment to allow access to global vars
+            
+            # Add parameter binding - this will shadow any existing variable with same name
+            update_env(call_env, param, arg_value)
+            
             try:
                 result = e(body, call_env)
                 return check_type(result, return_type)
@@ -1340,11 +1390,17 @@ def compile_and_run(ast, env=None):
 
 # def test_slice_array():
 code = """
-int[] arr = [1, 2, 3, 4, 5];
-int[] sliced = arr[1:4];
-int result = arr[2];
-println(result);
-"""
+            int x = 1;
+            int z = 100;
+            fun foo(y : int) : int{
+                x = 2;
+                println(z);
+                return x;
+            }
+            println(foo(10));
+            println(z);
+            println(x);
+        """
 
 # code2 = """
 # fun add(a: int, b: int): int {
@@ -1355,12 +1411,14 @@ println(result);
 # println(result);
 # """
 
-# code3="""
-#             int[] arr = [10, 20, 30];
-#             arr[1] = arr[0] + arr[2];
-#             println(arr[1]);
-#             """
-ast = parse(code)
+code3="""
+            int[] arr = [10, 20, 30];
+            int[] slice = arr[0:2];
+            slice[0]=100;
+            println(slice[0]);
+            println(arr[0]);
+            """
+ast = parse(code3)
 print(e(ast))
 
 

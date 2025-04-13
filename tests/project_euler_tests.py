@@ -1,4 +1,4 @@
-from test_framework import TestCase, run_test_suite
+from tests.test_framework import TestCase, run_test_suite
 
 def run_tests():
     test_cases = [
@@ -117,32 +117,32 @@ def run_tests():
             """,
             expected_output="Sum of squares = 338350\nSquare of sum = 25502500\nDifference = 25164150"
         ),
-        # TestCase(
-        #     name="Project Euler #7 - 10001st Prime",
-        #     code="""
-        #     int count = 0;
-        #     int i = 2;
-        #     int result = 0;
-        #     while (count < 10001) {
-        #         int j = 2;
-        #         int prime = 1;
-        #         while (j * j <= i) {
-        #             if (i % j == 0) {
-        #                 prime = 0;
-        #                 break;
-        #             }
-        #             j = j + 1;
-        #         }
-        #         if (prime == 1) {
-        #             count = count + 1;
-        #             result = i;
-        #         }
-        #         i = i + 1;
-        #     }
-        #     println("10001st prime number: " ++ str(result));
-        #     """,
-        #     expected_output="10001st prime number: 104743"
-        # ),
+        TestCase(
+            name="Project Euler #7 - 10001st Prime",
+            code="""
+            int count = 0;
+            int i = 2;
+            int result = 0;
+            while (count < 10001) {
+                int j = 2;
+                int prime = 1;
+                while (j * j <= i) {
+                    if (i % j == 0) {
+                        prime = 0;
+                        break;
+                    }
+                    j = j + 1;
+                }
+                if (prime == 1) {
+                    count = count + 1;
+                    result = i;
+                }
+                i = i + 1;
+            }
+            println("10001st prime number: " ++ str(result));
+            """,
+            expected_output="10001st prime number: 104743"
+        ),
         # TestCase(
         #     name="Project Euler #8 - Largest Product in a Series",
         #     code="""

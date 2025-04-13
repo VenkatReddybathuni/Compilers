@@ -1,4 +1,4 @@
-from test_framework import TestCase, run_test_suite
+from tests.test_framework import TestCase, run_test_suite
 from main import TypeError, ParseError
 
 def run_tests():
@@ -94,20 +94,19 @@ def run_tests():
             expected_output="Hello World!"
         ),
 
-        # String Operation Tests
+        
         TestCase(
-            name="Error Code Function",
-            code="""
-            fun error(code : int) : string {
-                if (code > 0) {
-                    return "Error Code: " ++ str(code);
-                } else {
-                    return "No Error";
-                }
+            name = "scope check",
+            code = """
+            int x = 1;
+            fun foo(x : int) : int{
+                x = 2;
+                return x;
             }
-            println(error(404));
-            """,
-            expected_output="Error Code: 404"
+            println(foo(x));
+            println(x);
+        """,
+        expected_output = "2\n1"
         ),
 
         # While Loop Tests
