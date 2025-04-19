@@ -3,7 +3,7 @@ import sys
 sys.path.append(str(Path(__file__).parent.parent))
 
 from main import parse, BytecodeCompiler, BytecodeVM
-from tests.test_framework import capture_stdout 
+from test_framework import capture_stdout 
 from io import StringIO
 
 def run_bytecode_test(code, expected_output=None, env=None):
@@ -131,6 +131,88 @@ def test_loops():
     expected = "15"
     run_bytecode_test(code, expected)
 
+def test_arrays():
+    print("\n===== Testing Arrays =====")
+    
+    # Basic array creation and access
+    print("Testing array creation and access...")
+    code1 = """
+    int[] numbers = [10, 20, 30, 40, 50];
+    println(numbers[2]);
+    """
+    expected1 = "30"
+    run_bytecode_test(code1, expected1)
+    
+    # Array assignment
+    print("Testing array element assignment...")
+    code2 = """
+    int[] numbers = [10, 20, 30];
+    numbers[1] = 99;
+    println(numbers[1]);
+    """
+    expected2 = "99"
+    run_bytecode_test(code2, expected2)
+    
+    # Array length
+    # print("Testing array length...")
+    # code3 = """
+    # int[] numbers = [5, 10, 15, 20, 25];
+    # println(len(numbers));
+    # """
+    # expected3 = "5"
+    # run_bytecode_test(code3, expected3)
+    
+    # # Empty array
+    # print("Testing empty array...")
+    # code4 = """
+    # int[] empty = [];
+    # println(len(empty));
+    # """
+    # expected4 = "0"
+    # run_bytecode_test(code4, expected4)
+    
+    # Array slicing
+    print("Testing array slicing...")
+    code5 = """
+    int[] numbers = [10, 20, 30, 40, 50];
+    int[] slice = numbers[1:4];
+    println(slice[0]);
+    println(slice[2]);
+    """
+    expected5 = "20\n40"
+    run_bytecode_test(code5, expected5)
+    
+    # Array modification doesn't affect original
+    print("Testing array independence after slicing...")
+    code6 = """
+    int[] original = [1, 2, 3, 4, 5];
+    int[] slice = original[0:3];
+    slice[0] = 99;
+    println(slice[0]);
+    println(original[0]);
+    """
+    expected6 = "99\n1"
+    run_bytecode_test(code6, expected6)
+    
+    # Using arrays in calculations
+    print("Testing array elements in calculations...")
+    code7 = """
+    int[] values = [5, 10, 15];
+    int sum = values[0] + values[1] + values[2];
+    println(sum);
+    """
+    expected7 = "30"
+    run_bytecode_test(code7, expected7)
+    
+    # Array of strings
+    print("Testing array of strings...")
+    code8 = """
+    string[] fruits = ["apple", "banana", "cherry"];
+    println(fruits[0] ++ " and " ++ fruits[2]);
+    """
+    expected8 = "apple and cherry"
+    run_bytecode_test(code8, expected8)
+
 def run_tests():
     try:
         test_arithmetic()
@@ -138,6 +220,7 @@ def run_tests():
         test_strings()
         test_conditionals()
         test_loops()
+        test_arrays()  # Add the new test function to the test suite
         print("\nAll bytecode compilation tests passed!")
     except AssertionError as e:
         print(f"\nTest failed: {e}")
