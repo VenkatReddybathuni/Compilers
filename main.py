@@ -233,7 +233,7 @@ def e(tree: AST, env=None) -> int | bool | str | list:
     match tree:
         case PrintLn(expr):
             result = e(expr, env)
-            print(result)
+            print(result, flush=True)  # Added flush=True to ensure immediate output
             return result
         case Number(v):
             return int(v)
@@ -488,6 +488,10 @@ def lex(s: str) -> Iterator[Token]:
                             t += next_char
                             i += 1
                     yield OperatorToken(t)
+                case _:
+                    raise ParseError(f"Unexpected character: {t}")
+
+        
 
 class ParseError(Exception):
     pass
@@ -863,7 +867,7 @@ def parse(s: str) -> AST:
             case _:
                 raise ParseError(f"Unexpected token: {t.peek(None)}")
 
-    return parse_stmt()
+    return parse_statements()
 
 # Add a new Bytecode class for compilation
 @dataclass
@@ -1008,15 +1012,7 @@ class BytecodeCompiler:
                 self.emit("LABEL", end_label)
             
             case While(cond, body):
-                start_label = self.get_label()
-                end_label = self.get_label()
-                
-                self.emit("LABEL", start_label)
-                self._compile_node(cond)
-                self.emit("JUMP_IF_FALSE", end_label)
-                self._compile_node(body)
-                self.emit("JUMP", start_label)
-                self.emit("LABEL", end_label)
+                self._compile_while(node)
             
             case PrintLn(expr):
                 self._compile_node(expr)
@@ -1109,10 +1105,12 @@ class BytecodeVM:
     def __init__(self, bytecode):
         self.instructions = bytecode['instructions']
         self.constants = bytecode['constants']
-        self.variables = [None] * max(len(bytecode['variables']), 1)
+        # Initialize variables array with None values for all variables
+        self.variables = [None] * max(len(bytecode['variables']) + 1, 1)
         self.stack = []
         self.ip = 0  # Instruction pointer
         self.call_stack = []  # For function calls
+        self.debug = False  # Debug mode flag
         
     def run(self):
         result = None
@@ -1123,6 +1121,10 @@ class BytecodeVM:
                 
                 opcode = instruction.opcode
                 args = instruction.args if instruction.args else []
+                
+                if self.debug:
+                    stack_str = str(self.stack)[-60:] if self.stack else "[]"
+                    print(f"EXEC: {self.ip-1}: {opcode} {args} (Stack: {stack_str})")
                 
                 if opcode == "LOAD_CONST":
                     self.stack.append(self.constants[args[0]])
@@ -1223,8 +1225,11 @@ class BytecodeVM:
                     self.stack.append(str(value))
                 
                 elif opcode == "PRINT":
+                    if not self.stack:
+                        print("ERROR: Stack underflow in PRINT operation")
+                        continue
                     value = self.stack.pop()
-                    print(value)
+                    print(value, flush=True)
                     result = value
                 
                 elif opcode == "POP_TOP":
@@ -1561,11 +1566,14 @@ def enhanced_compile_node(self, node):
             self._compile_dict_access(node)
         case DictAssign(dict, key, value):
             self._compile_dict_assign(node)
+        case Break():
+            self._compile_break(node)
         case _:
             original_compile_node(self, node)
 
 # Now we can safely update the _compile_node method
 BytecodeCompiler._compile_node = enhanced_compile_node
+
 # Add compilation function to our interpreter
 def compile_and_run(ast, env=None):
     """Compile AST to bytecode and run it with the VM"""
@@ -1584,6 +1592,55 @@ def compile_and_run(ast, env=None):
     
     vm = BytecodeVM(bytecode)
     return vm.run()
+
+# Add break compilation support method to BytecodeCompiler
+def _compile_break(self, node):
+    """Compile a break statement"""
+    # Get the innermost loop's end label
+    if not hasattr(self, 'loop_end_labels') or not self.loop_end_labels:
+        raise SyntaxError("Break statement outside of loop")
+    end_label = self.loop_end_labels[-1]
+    self.emit("JUMP", end_label)
+
+# Add to the BytecodeCompiler class
+BytecodeCompiler._compile_break = _compile_break
+
+def _compile_while(self, node):
+    """Compile while loop with support for break statements"""
+    # Create labels for loop start and end
+    start_label = self.get_label()
+    end_label = self.get_label()
+    
+    # Initialize loop_end_labels if it doesn't exist
+    if not hasattr(self, 'loop_end_labels'):
+        self.loop_end_labels = []
+    
+    # Push the end label onto the stack for break statements
+    self.loop_end_labels.append(end_label)
+    
+    # Emit loop start label
+    self.emit("LABEL", start_label)
+    
+    # Compile condition
+    self._compile_node(node.cond)
+    
+    # Jump to end if condition is false
+    self.emit("JUMP_IF_FALSE", end_label)
+    
+    # Compile loop body
+    self._compile_node(node.body)
+    
+    # Jump back to start
+    self.emit("JUMP", start_label)
+    
+    # Emit loop end label
+    self.emit("LABEL", end_label)
+    
+    # Pop the end label as we're leaving the loop
+    self.loop_end_labels.pop()
+
+# Add this method to the BytecodeCompiler class
+BytecodeCompiler._compile_while = _compile_while
 
 # def test_slice_array():
 code = """

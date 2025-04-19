@@ -11,7 +11,8 @@ def run_all_tests():
     print("3. Error Tests")
     print("4. Reference Algorithm Tests")
     print("5. Project Euler Reference Tests")
-    print("6. All Tests")
+    print("6. Project Euler Bytecode Tests")
+    print("7. All Tests")
     print("0. Exit")
     
     choice = input("Enter your choice: ")
@@ -49,6 +50,11 @@ def run_all_tests():
             run_euler_tests()
             
         elif choice == 6:
+            print("\nRunning Project Euler Bytecode Tests:")
+            from tests.project_euler_tests import run_tests
+            run_tests()
+            
+        elif choice == 7:
             print("\nRunning All Tests:")
             
             print("\n1. Unit Tests:")
@@ -70,6 +76,10 @@ def run_all_tests():
             print("\n5. Project Euler Reference Tests:")
             from tests.project_euler_reference_tests import run_euler_tests
             run_euler_tests()
+            
+            print("\n6. Project Euler Bytecode Tests:")
+            from tests.project_euler_tests import run_tests as run_euler_bytecode_tests
+            run_euler_bytecode_tests()
             
         else:
             print("Invalid choice. Please enter a number from the menu.")
@@ -104,10 +114,13 @@ if __name__ == "__main__":
         elif test_type == "euler":
             from tests.project_euler_reference_tests import run_euler_tests
             run_euler_tests()
+        elif test_type == "euler_bytecode":
+            from tests.project_euler_tests import run_tests
+            run_tests()
         elif test_type == "all":
             run_all_tests()
         else:
             print(f"Unknown test type: {test_type}")
-            print("Available test types: unit, bytecode, error, algorithm, euler, all")
+            print("Available test types: unit, bytecode, error, algorithm, euler, euler_bytecode, all")
     else:
         run_all_tests()

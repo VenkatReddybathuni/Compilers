@@ -1,0 +1,5 @@
+println("Line 1 - Testing print");
+int x = 10;
+println("Line 2 - X is: " ++ str(x));
+x = x + 5;
+println("Line 3 - X is now: " ++ str(x));

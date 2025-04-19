@@ -1,0 +1,28 @@
+println("Finding largest palindrome made from the product of two 3-digit numbers...");
+int maxpalindrome = 0;
+int i = 999; 
+while (i >= 100) {
+    println("Checking " ++ str(i));
+    int j = 999;  
+    while (j >= i) { 
+        int product = i * j;
+        if (product <= maxpalindrome) {
+            break;
+        }
+        
+        int reversed = 0;
+        int temp = product;
+        while (temp > 0) {
+            reversed = reversed * 10 + temp % 10;
+            temp = temp / 10;
+        }
+        
+        if (product == reversed and product > maxpalindrome) {
+            maxpalindrome = product;
+            println("Found new palindrome: " ++ str(product));
+        }
+        j = j - 1;
+    }
+    i = i - 1;
+}
+println("Largest palindrome made from the product of two 3-digit numbers: " ++ str(maxpalindrome));
