@@ -558,30 +558,12 @@ def parse(s: str) -> AST:
                     let_node.body = next_stmt if next_stmt else Sequence([])
                     return let_node
                 
-                # Check for function call
-                if isinstance(t.peek(None), VarToken):
-                    func_name = next(t).v
-                    if t.peek(None) == OperatorToken("("):
-                        next(t)
-                        arg = parse_expr()
-                        expect(OperatorToken(")"))
-                        expect(OperatorToken(";"))
-                        return Let(var, Call(func_name, arg), Sequence([]))
-                    elif t.peek(None) == OperatorToken("{"):
-                        next(t)
-                        key = parse_expr()
-                        expect(OperatorToken("}"))
-                        expect(OperatorToken(";"))
-                        # print("key is ", key)
-                        # print("variable",func_name)
-                        return Let(var, DictAccess(Var(func_name), key), Sequence([]))
-                    t.prepend(VarToken(func_name))  # Put back the token if not a function call
-
-                
+                # Allow any expression, including complex expressions with dictionary lookups
                 expr = parse_expr()
                 expect(OperatorToken(";"))
                 next_stmt = parse_statements() if t.peek(None) is not None else None
                 return Let(var, expr, next_stmt if next_stmt else Sequence([]))
+                
             case KeywordToken("fun"):
                 next(t)
                 if not isinstance(t.peek(None), VarToken):
@@ -1309,6 +1291,35 @@ class BytecodeVM:
                         raise TypeError(f"Cannot slice {type(seq).__name__}")
                     self.stack.append(seq[start_idx:end_idx])
                 
+                elif opcode == "CREATE_DICT":
+                    size = args[0]
+                    dict_obj = {}
+                    # Pop pairs in reverse order (since later items are deeper in the stack)
+                    for _ in range(size):
+                        value = self.stack.pop()
+                        key = self.stack.pop()
+                        dict_obj[key] = value
+                    self.stack.append(dict_obj)
+
+                elif opcode == "LOAD_DICT_ITEM":
+                    key = self.stack.pop()
+                    dict_obj = self.stack.pop()
+                    if not isinstance(dict_obj, dict):
+                        raise TypeError(f"Cannot access key in non-dict type {type(dict_obj).__name__}")
+                    try:
+                        self.stack.append(dict_obj[key])
+                    except KeyError:
+                        raise KeyError(f"Key {key} not found in dictionary")
+
+                elif opcode == "STORE_DICT_ITEM":
+                    value = self.stack.pop()
+                    key = self.stack.pop()
+                    dict_obj = self.stack.pop()
+                    if not isinstance(dict_obj, dict):
+                        raise TypeError(f"Cannot assign key in non-dict type {type(dict_obj).__name__}")
+                    dict_obj[key] = value
+                    self.stack.append(value)
+                
                 elif opcode == "MAKE_FUNCTION":
                     # Function metadata is already on the stack
                     # Just keep it there (it's a tuple with function info)
@@ -1493,6 +1504,33 @@ BytecodeCompiler._compile_function = _compile_function
 BytecodeCompiler._compile_call = _compile_call
 BytecodeCompiler._compile_return = _compile_return
 
+# Add dictionary compilation support methods to BytecodeCompiler
+def _compile_dict(self, node):
+    """Compile dictionary creation"""
+    # Compile each key-value pair
+    for key, value in node.pairs:
+        self._compile_node(key)
+        self._compile_node(value)
+    self.emit("CREATE_DICT", len(node.pairs))
+
+def _compile_dict_access(self, node):
+    """Compile dictionary access"""
+    self._compile_node(node.dict)
+    self._compile_node(node.key)
+    self.emit("LOAD_DICT_ITEM")
+
+def _compile_dict_assign(self, node):
+    """Compile dictionary assignment"""
+    self._compile_node(node.dict)
+    self._compile_node(node.key)
+    self._compile_node(node.value)
+    self.emit("STORE_DICT_ITEM")
+
+# Assign these methods to the BytecodeCompiler class
+BytecodeCompiler._compile_dict = _compile_dict
+BytecodeCompiler._compile_dict_access = _compile_dict_access
+BytecodeCompiler._compile_dict_assign = _compile_dict_assign
+
 # Then update the _compile_node method to use these methods
 original_compile_node = BytecodeCompiler._compile_node
 
@@ -1517,6 +1555,12 @@ def enhanced_compile_node(self, node):
             self._compile_call(node)
         case Return(expr):
             self._compile_return(node)
+        case Dict(pairs):
+            self._compile_dict(node)
+        case DictAccess(dict, key):
+            self._compile_dict_access(node)
+        case DictAssign(dict, key, value):
+            self._compile_dict_assign(node)
         case _:
             original_compile_node(self, node)
 
