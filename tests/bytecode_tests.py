@@ -213,6 +213,94 @@ def test_arrays():
     expected8 = "apple and cherry"
     run_bytecode_test(code8, expected8)
 
+def test_functions():
+    print("\n===== Testing Functions =====")
+    
+    # Basic function definition and call
+    print("Testing basic function call...")
+    code1 = """
+    fun add(a: int): int {
+        return a + 5;
+    }
+    println(add(10));
+    """
+    expected1 = "15"
+    run_bytecode_test(code1, expected1)
+    
+    # Function with multiple statements
+    print("Testing function with multiple statements...")
+    code2 = """
+    fun calculate(x: int): int {
+        int y = x * 2;
+        int z = y + 10;
+        return z / 2;
+    }
+    println(calculate(5));
+    """
+    expected2 = "10"
+    run_bytecode_test(code2, expected2)
+    
+    # Function with conditional logic
+    print("Testing function with conditionals...")
+    code3 = """
+    fun max(a: int): int {
+        if (a > 10) {
+            return a;
+        } else {
+            return 10;
+        }
+    }
+    println(max(5));
+    println(max(15));
+    """
+    expected3 = "10\n15"
+    run_bytecode_test(code3, expected3)
+    
+    # Recursive function
+    print("Testing recursive function...")
+    code4 = """
+    fun factorial(n: int): int {
+        if (n <= 1) {
+            return 1;
+        } else {
+            return n * factorial(n - 1);
+        }
+    }
+    println(factorial(5));
+    """
+    expected4 = "120"
+    run_bytecode_test(code4, expected4)
+    
+    # # Function working with arrays
+    # print("Testing function with arrays...")
+    # code5 = """
+    # fun sumArray(arr: int[]): int {
+    #     int sum = 0;
+    #     int i = 0;
+    #     while (i < len(arr)) {
+    #         sum = sum + arr[i];
+    #         i = i + 1;
+    #     }
+    #     return sum;
+    # }
+    # int[] numbers = [10, 20, 30, 40];
+    # println(sumArray(numbers));
+    # """
+    # expected5 = "100"
+    # run_bytecode_test(code5, expected5)
+    
+    # Function with string manipulation
+    print("Testing function with strings...")
+    code6 = """
+    fun greet(name: string): string {
+        return "Hello, " ++ name ++ "!";
+    }
+    println(greet("World"));
+    """
+    expected6 = "Hello, World!"
+    run_bytecode_test(code6, expected6)
+
+# Update the run_tests function to include the new test function
 def run_tests():
     try:
         test_arithmetic()
@@ -220,7 +308,8 @@ def run_tests():
         test_strings()
         test_conditionals()
         test_loops()
-        test_arrays()  # Add the new test function to the test suite
+        test_arrays()
+        test_functions()  # Add the new test function
         print("\nAll bytecode compilation tests passed!")
     except AssertionError as e:
         print(f"\nTest failed: {e}")

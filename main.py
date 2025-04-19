@@ -243,52 +243,6 @@ def e(tree: AST, env=None) -> int | bool | str | list:
             # Store function definition with its type information
             env.append((f, (a, at, b, rt)))  # Store param name, param type, body, return type
             return e(c, env)
-        # case Call(f, x):
-        #     param, param_type, body, return_type = lookup(env, f)  # Get function definition with types
-        #     arg_value = e(x, env)
-
-        #     # Add explicit conversion for string parameters if needed
-        #     if param_type == "string" and isinstance(arg_value, int):
-        #         arg_value = str(arg_value)
-        #     elif param_type == "int" and isinstance(arg_value, str):
-        #         raise TypeError(f"Function '{f}' expects int but got string")
-
-        #     try:
-        #         check_type(arg_value, param_type)
-        #     except TypeError as te:
-        #         raise TypeError(f"Function '{f}' parameter type mismatch: {str(te)}")
-
-        #     call_env = env.copy()
-        #     call_env.append((param, arg_value))
-        #     try:
-        #         result = e(body, call_env)
-        #         return check_type(result, return_type)
-        #     except ReturnValue as rv:
-        #         return check_type(rv.value, return_type)
-        # case Call(f, x):
-        #     param, param_type, body, return_type = lookup(env, f)  # Get function definition with types
-        #     arg_value = e(x, env)
-
-        #     # Add explicit conversion for string parameters if needed
-        #     if param_type == "string" and isinstance(arg_value, int):
-        #         arg_value = str(arg_value)
-        #     elif param_type == "int" and isinstance(arg_value, str):
-        #         raise TypeError(f"Function '{f}' expects int but got string")
-
-        #     try:
-        #         check_type(arg_value, param_type)
-        #     except TypeError as te:
-        #         raise TypeError(f"Function '{f}' parameter type mismatch: {str(te)}")
-
-        #     # Create a new environment just for this function call
-        #     call_env = []  # Start with an empty environment
-        #     call_env.append((param, arg_value))  # Add parameter binding
-            
-        #     try:
-        #         result = e(body, call_env)
-        #         return check_type(result, return_type)
-        #     except ReturnValue as rv:
-        #         return check_type(rv.value, return_type)
         case Call(f, x):
             param, param_type, body, return_type = lookup(env, f)  # Get function definition with types
             arg_value = e(x, env)
@@ -1101,6 +1055,73 @@ class BytecodeCompiler:
             case _:
                 raise NotImplementedError(f"Bytecode compilation not implemented for {type(node)}")
 
+    def _compile_function(self, node):
+        """Compile a function definition"""
+        # Store function name in variables map
+        if node.n not in self.variables:
+            self.variables[node.n] = len(self.variables)
+        
+        # Generate unique labels for function entry and exit
+        func_label = self.get_label()
+        end_label = self.get_label()
+        
+        # Store function metadata in constants pool
+        # (label, param_name, return_type)
+        func_meta = (func_label, node.a, node.rt)
+        func_meta_idx = self.add_constant(func_meta)
+        
+        # Create a function object and store it in the variable
+        self.emit("LOAD_CONST", func_meta_idx)
+        self.emit("MAKE_FUNCTION")
+        self.emit("STORE_VAR", self.variables[node.n])
+        
+        # Jump over the function code
+        self.emit("JUMP", end_label)
+        
+        # Function body starts here
+        self.emit("LABEL", func_label)
+        
+        # Add parameter to variables
+        if node.a not in self.variables:
+            self.variables[node.a] = len(self.variables)
+        
+        # Store the parameter value passed on the stack
+        self.emit("STORE_VAR", self.variables[node.a])
+        
+        # Compile the function body
+        self._compile_node(node.b)
+        
+        # If no explicit return, add a default return None
+        self.emit("LOAD_CONST", self.add_constant(0))  # Default return value
+        self.emit("RETURN_VALUE")
+        
+        # Function definition is done, continue with the rest of the code
+        self.emit("LABEL", end_label)
+        
+        # Compile the rest of the program
+        self._compile_node(node.e)
+
+    def _compile_call(self, node):
+        """Compile a function call"""
+        # Load the function object
+        if node.n not in self.variables:
+            self.variables[node.n] = len(self.variables)
+        self.emit("LOAD_VAR", self.variables[node.n])
+        
+        # Evaluate and push argument
+        self._compile_node(node.a)
+        
+        # Call the function
+        self.emit("CALL_FUNCTION", 1)  # 1 argument
+
+    def _compile_return(self, node):
+        """Compile a return statement"""
+        # Evaluate the return expression
+        self._compile_node(node.expr)
+        
+        # Return from function
+        self.emit("RETURN_VALUE")
+
 # Define a BytecodeVM class to execute compiled bytecode
 class BytecodeVM:
     def __init__(self, bytecode):
@@ -1109,6 +1130,7 @@ class BytecodeVM:
         self.variables = [None] * max(len(bytecode['variables']), 1)
         self.stack = []
         self.ip = 0  # Instruction pointer
+        self.call_stack = []  # For function calls
         
     def run(self):
         result = None
@@ -1287,6 +1309,58 @@ class BytecodeVM:
                         raise TypeError(f"Cannot slice {type(seq).__name__}")
                     self.stack.append(seq[start_idx:end_idx])
                 
+                elif opcode == "MAKE_FUNCTION":
+                    # Function metadata is already on the stack
+                    # Just keep it there (it's a tuple with function info)
+                    pass
+
+                elif opcode == "CALL_FUNCTION":
+                    num_args = args[0]
+                    # Pop arguments (we only support 1 arg for now)
+                    arg_val = self.stack.pop()
+                    
+                    # Pop function object (metadata tuple)
+                    func_obj = self.stack.pop()
+                    
+                    if not isinstance(func_obj, tuple) or len(func_obj) != 3:
+                        raise TypeError(f"Cannot call {func_obj}")
+                    
+                    # Unpack function metadata
+                    func_label, param_name, return_type = func_obj
+                    
+                    # Save current instruction pointer for return
+                    return_ip = self.ip
+                    
+                    # Push argument for the function
+                    self.stack.append(arg_val)
+                    
+                    # Jump to function body
+                    self.ip = self._find_label(func_label)
+                    
+                    # Save current state to call stack
+                    self.call_stack.append((return_ip, self.variables.copy()))
+                    
+                elif opcode == "RETURN_VALUE":
+                    # Get return value
+                    return_value = self.stack.pop()
+                    
+                    # Restore calling context if there's a saved context
+                    if self.call_stack:
+                        # Pop the last call frame
+                        return_ip, saved_variables = self.call_stack.pop()
+                        
+                        # Restore variables from before the call
+                        self.variables = saved_variables
+                        
+                        # Jump back to caller
+                        self.ip = return_ip
+                        
+                        # Push return value onto stack for caller
+                        self.stack.append(return_value)
+                    else:
+                        # Top-level return or end of program
+                        self.stack.append(return_value)
+                        self.ip = len(self.instructions)  # Exit execution
                 else:
                     raise ValueError(f"Unknown opcode: {opcode}")
             
@@ -1347,6 +1421,79 @@ BytecodeCompiler._compile_array_assign = _compile_array_assign
 BytecodeCompiler._compile_length = _compile_length
 
 # Add these cases to the _compile_node method's match statement
+def _compile_function(self, node):
+    """Compile a function definition"""
+    # Store function name in variables map
+    if node.n not in self.variables:
+        self.variables[node.n] = len(self.variables)
+    
+    # Generate unique labels for function entry and exit
+    func_label = self.get_label()
+    end_label = self.get_label()
+    
+    # Store function metadata in constants pool
+    # (label, param_name, return_type)
+    func_meta = (func_label, node.a, node.rt)
+    func_meta_idx = self.add_constant(func_meta)
+    
+    # Create a function object and store it in the variable
+    self.emit("LOAD_CONST", func_meta_idx)
+    self.emit("MAKE_FUNCTION")
+    self.emit("STORE_VAR", self.variables[node.n])
+    
+    # Jump over the function code
+    self.emit("JUMP", end_label)
+    
+    # Function body starts here
+    self.emit("LABEL", func_label)
+    
+    # Add parameter to variables
+    if node.a not in self.variables:
+        self.variables[node.a] = len(self.variables)
+    
+    # Store the parameter value passed on the stack
+    self.emit("STORE_VAR", self.variables[node.a])
+    
+    # Compile the function body
+    self._compile_node(node.b)
+    
+    # If no explicit return, add a default return None
+    self.emit("LOAD_CONST", self.add_constant(0))  # Default return value
+    self.emit("RETURN_VALUE")
+    
+    # Function definition is done, continue with the rest of the code
+    self.emit("LABEL", end_label)
+    
+    # Compile the rest of the program
+    self._compile_node(node.e)
+
+def _compile_call(self, node):
+    """Compile a function call"""
+    # Load the function object
+    if node.n not in self.variables:
+        self.variables[node.n] = len(self.variables)
+    self.emit("LOAD_VAR", self.variables[node.n])
+    
+    # Evaluate and push argument
+    self._compile_node(node.a)
+    
+    # Call the function
+    self.emit("CALL_FUNCTION", 1)  # 1 argument
+
+def _compile_return(self, node):
+    """Compile a return statement"""
+    # Evaluate the return expression
+    self._compile_node(node.expr)
+    
+    # Return from function
+    self.emit("RETURN_VALUE")
+
+# Assign these methods to the BytecodeCompiler class
+BytecodeCompiler._compile_function = _compile_function
+BytecodeCompiler._compile_call = _compile_call
+BytecodeCompiler._compile_return = _compile_return
+
+# Then update the _compile_node method to use these methods
 original_compile_node = BytecodeCompiler._compile_node
 
 def enhanced_compile_node(self, node):
@@ -1364,11 +1511,17 @@ def enhanced_compile_node(self, node):
             self._compile_length(node)
         case Slice(sequence, start, end):
             self._compile_slice(node)
+        case Fun(n, a, at, rt, b, e):
+            self._compile_function(node)
+        case Call(n, a):
+            self._compile_call(node)
+        case Return(expr):
+            self._compile_return(node)
         case _:
             original_compile_node(self, node)
 
+# Now we can safely update the _compile_node method
 BytecodeCompiler._compile_node = enhanced_compile_node
-
 # Add compilation function to our interpreter
 def compile_and_run(ast, env=None):
     """Compile AST to bytecode and run it with the VM"""
