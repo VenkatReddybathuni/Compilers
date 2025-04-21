@@ -492,7 +492,10 @@ def check_type(value, expected_type):
 def lookup(env, v):
     # Add built-in functions
     if v == "len":
-        return ("x", "any", Length(Var("x")), "int")
+        # Create a special closure for the len function
+        params = [("obj", "any")]
+        body = Length(Var("obj"))
+        return Closure(params, body, "int", [])
     
     # First check in local environment
     env_reversed = list(reversed(env))
@@ -1587,10 +1590,19 @@ class BytecodeVM:
         self.global_vars = bytecode['global_vars']
         # Create a separate globals dict for global variable access
         self.globals = {}
+        # Built-in functions
+        self.builtins = {'len': self._builtin_len}
         self.stack = []
         self.ip = 0  # Instruction pointer
         self.call_stack = []  # For function calls
         self.debug = False  # Debug mode flag
+    
+    def _builtin_len(self, arg):
+        """Built-in len function implementation"""
+        if isinstance(arg, (list, str, dict)):
+            return len(arg)
+        else:
+            raise TypeError(f"Object of type {type(arg).__name__} has no len()")
         
     def run(self):
         result = None
@@ -1611,10 +1623,17 @@ class BytecodeVM:
                 
                 elif opcode == "LOAD_VAR":
                     var_idx = args[0]
+                    var_name = self._get_var_name(var_idx)
+                    
+                    # Check for built-in functions first
+                    if var_name in self.builtins:
+                        # For built-ins, we create a special callable object
+                        self.stack.append(('__builtin__', var_name))
+                        continue
+                    
                     # For regular variables, we use the local vars first then fallback to globals
                     if var_idx >= len(self.variables) or self.variables[var_idx] is None:
                         # Check if it's a global variable
-                        var_name = self._get_var_name(var_idx)
                         if var_name in self.globals:
                             self.stack.append(self.globals[var_name])
                         else:
@@ -1800,10 +1819,15 @@ class BytecodeVM:
                     self.stack.append(elements)
                 
                 elif opcode == "GET_LENGTH":
+                    # Pop the object whose length we need to get
                     obj = self.stack.pop()
-                    if not isinstance(obj, (list, str)):
+                    
+                    # Check the type and get its length
+                    if isinstance(obj, (list, str, dict)):
+                        length = len(obj)
+                        self.stack.append(length)
+                    else:
                         raise TypeError(f"Cannot get length of {type(obj).__name__}")
-                    self.stack.append(len(obj))
                 
                 elif opcode == "SLICE":
                     end_idx = self.stack.pop()
@@ -1853,10 +1877,24 @@ class BytecodeVM:
                     arg_vals = [self.stack.pop() for _ in range(num_args)]
                     arg_vals.reverse()  # Reverse to get correct argument order
 
-                    # Pop function object (metadata tuple)
+                    # Pop function object (metadata tuple or built-in)
                     func_obj = self.stack.pop()
 
-                    if not isinstance(func_obj, tuple) or len(func_obj) != 3:
+                    # Handle built-in functions
+                    if isinstance(func_obj, tuple) and func_obj[0] == '__builtin__':
+                        builtin_name = func_obj[1]
+                        if builtin_name in self.builtins:
+                            # Call the built-in function
+                            if len(arg_vals) != 1:
+                                raise TypeError(f"{builtin_name}() takes exactly 1 argument ({len(arg_vals)} given)")
+                            result = self.builtins[builtin_name](arg_vals[0])
+                            self.stack.append(result)
+                            continue
+                        else:
+                            raise ValueError(f"Unknown built-in function: {builtin_name}")
+
+                    # Handle regular functions
+                    if not isinstance(func_obj, tuple) or len(func_obj) not in [3, 4]:
                         raise TypeError(f"Cannot call {func_obj}")
 
                     # Unpack function metadata
