@@ -47,16 +47,22 @@ class Sequence(AST):
 @dataclass
 class Fun(AST):
     n: str       # name
-    a: str       # argument name
-    at: str      # argument type
+    params: list[tuple[str, str]]  # list of (param_name, param_type) tuples
     rt: str      # return type
     b: AST       # body
     e: AST       # expression
 
 @dataclass
 class Call(AST):
-    n: str    
-    a: AST    
+    n: str       # function name
+    args: list   # list of arguments
+
+@dataclass
+class Closure(AST):
+    params: list         # list of (param_name, param_type) tuples
+    body: AST           # function body
+    return_type: str    # return type
+    captured_env: list  # captured environment
 
 @dataclass
 class PrintLn(AST):
@@ -116,6 +122,13 @@ class DictAssign(AST):
     dict: AST
     key: AST
     value: AST
+
+@dataclass
+class Slice(AST):
+    sequence: AST
+    start: AST
+    end: AST
+
 class Token:
     pass
 
@@ -149,10 +162,278 @@ class ArrayToken(Token):
     elements: list[Token]
 
 @dataclass
-class Slice(AST):
-    sequence: AST
-    start: AST
-    end: AST
+class TypeCheckError(Exception):
+    """An error raised during type checking"""
+    message: str
+    node: AST = None  # The AST node that caused the error
+    
+    def __str__(self):
+        return self.message
+
+class TypeChecker:
+    """A static type checker for our language"""
+    
+    def __init__(self):
+        self.environment = {}  # Maps variable names to their types
+        self.function_env = {}  # Maps function names to their signatures
+        self.current_function = None  # Current function being checked
+        self.return_type = None  # Expected return type of current function
+        self.errors = []
+    
+    def check(self, ast):
+        """Perform type checking on the entire AST"""
+        self._check_node(ast, scope={})
+        
+        if self.errors:
+            # Report the first error
+            raise self.errors[0]
+            
+        return True
+    
+    def _check_node(self, node, scope):
+        """Recursively check types in the AST"""
+        if node is None:
+            return "void"
+            
+        match node:
+            case Number(_):
+                return "int"
+                
+            case String(_):
+                return "string"
+                
+            case Var(name):
+                # Check if variable exists in scope or environment
+                if name in scope:
+                    return scope[name]
+                elif name in self.environment:
+                    return self.environment[name]
+                else:
+                    self.errors.append(TypeCheckError(f"Undefined variable '{name}'", node))
+                    return "unknown"
+                
+            case BinOp(op, left, right):
+                left_type = self._check_node(left, scope)
+                right_type = self._check_node(right, scope)
+                
+                # Handle string concatenation
+                if op == "++":
+                    if left_type != "string" or right_type != "string":
+                        self.errors.append(TypeCheckError(
+                            f"String concatenation (++) requires string operands, got '{left_type}' and '{right_type}'", node))
+                        return "string"  # Assume string anyway to avoid cascade errors
+                    return "string"
+                
+                # Handle comparison operators
+                if op in ["<", ">", "<=", ">=", "==", "!="]:
+                    # Type compatibility for comparisons
+                    if left_type != right_type:
+                        self.errors.append(TypeCheckError(
+                            f"Cannot compare '{left_type}' with '{right_type}'", node))
+                    return "bool"
+                
+                # Handle logical operators
+                if op in ["and", "or"]:
+                    # Both operands should be boolean
+                    if left_type != "bool" or right_type != "bool":
+                        self.errors.append(TypeCheckError(
+                            f"Logical operator '{op}' requires boolean operands, got '{left_type}' and '{right_type}'", node))
+                    return "bool"
+                
+                # Handle arithmetic operators
+                if op in ["+", "-", "*", "/", "%", "**"]:
+                    # Both operands should be numeric
+                    if left_type != "int" or right_type != "int":
+                        self.errors.append(TypeCheckError(
+                            f"Arithmetic operator '{op}' requires int operands, got '{left_type}' and '{right_type}'", node))
+                    return "int"
+                
+                # Unknown operator
+                self.errors.append(TypeCheckError(f"Unknown operator '{op}'", node))
+                return "unknown"
+                
+            case If(cond, then, else_):
+                cond_type = self._check_node(cond, scope)
+                
+                # Condition must be a boolean
+                if cond_type != "bool":
+                    self.errors.append(TypeCheckError(
+                        f"If condition must be boolean, got '{cond_type}'", cond))
+                
+                # Check both branches
+                then_type = self._check_node(then, scope)
+                else_type = self._check_node(else_, scope)
+                
+                # If expression returns the same type from both branches
+                if then_type != else_type:
+                    self.errors.append(TypeCheckError(
+                        f"If branches must have the same type, got '{then_type}' and '{else_type}'", node))
+                    return "unknown"
+                    
+                return then_type
+                
+            case Let(var, expr, body, var_type):
+                # Check the initialization expression
+                expr_type = self._check_node(expr, scope)
+                
+                # If variable type is specified, verify it matches expr_type
+                if var_type and expr_type != var_type:
+                    self.errors.append(TypeCheckError(
+                        f"Cannot assign {expr_type} to variable '{var}' of type {var_type}", node))
+                
+                # Add the variable to scope for the body
+                new_scope = scope.copy()
+                new_scope[var] = var_type if var_type else expr_type
+                self.environment[var] = var_type if var_type else expr_type
+                
+                # Check the body with the updated scope
+                return self._check_node(body, new_scope)
+                
+            case Assign(name, expr):
+                expr_type = self._check_node(expr, scope)
+                
+                # Check if variable exists and has the right type
+                if name in scope:
+                    var_type = scope[name]
+                    if var_type != expr_type:
+                        self.errors.append(TypeCheckError(
+                            f"Cannot assign {expr_type} to variable '{name}' of type {var_type}", node))
+                elif name in self.environment:
+                    var_type = self.environment[name]
+                    if var_type != expr_type:
+                        self.errors.append(TypeCheckError(
+                            f"Cannot assign {expr_type} to variable '{name}' of type {var_type}", node))
+                else:
+                    self.errors.append(TypeCheckError(f"Undefined variable '{name}'", node))
+                
+                return expr_type
+                
+            case Fun(n, params, rt, b, e):
+                # Store function signature in environment
+                param_types = [(param_name, param_type) for param_name, param_type in params]
+                self.function_env[n] = (param_types, rt)
+                
+                # Create a new scope for function parameters
+                func_scope = scope.copy()
+                for param_name, param_type in params:
+                    func_scope[param_name] = param_type
+                
+                # Save current function context
+                prev_function = self.current_function
+                prev_return_type = self.return_type
+                self.current_function = n
+                self.return_type = rt
+                
+                # Check function body
+                self._check_node(b, func_scope)
+                
+                # Restore function context
+                self.current_function = prev_function
+                self.return_type = prev_return_type
+                
+                # Continue with code after function definition
+                return self._check_node(e, scope)
+                
+            case Call(n, args):
+                # Check if the function exists
+                if n not in self.function_env:
+                    self.errors.append(TypeCheckError(f"Undefined function '{n}'", node))
+                    return "unknown"
+                
+                # Get function signature
+                func_sig = self.function_env[n]
+                param_types = func_sig[0]
+                return_type = func_sig[1]
+                
+                # Check argument count
+                if len(args) != len(param_types):
+                    self.errors.append(TypeCheckError(
+                        f"Function '{n}' expects {len(param_types)} arguments, got {len(args)}", node))
+                else:
+                    # Check argument types
+                    for i, (arg, (_, expected_type)) in enumerate(zip(args, param_types)):
+                        arg_type = self._check_node(arg, scope)
+                        if arg_type != expected_type:
+                            self.errors.append(TypeCheckError(
+                                f"Function '{n}' argument {i+1} expects {expected_type}, got {arg_type}", arg))
+                
+                return return_type
+                
+            case Return(expr):
+                expr_type = self._check_node(expr, scope)
+                
+                # Check if return type matches function return type
+                if self.current_function and self.return_type and expr_type != self.return_type:
+                    self.errors.append(TypeCheckError(
+                        f"Function '{self.current_function}' expects return type {self.return_type}, got {expr_type}", node))
+                
+                return expr_type
+                
+            case Sequence(statements):
+                result_type = "void"
+                for stmt in statements:
+                    result_type = self._check_node(stmt, scope)
+                return result_type
+                
+            case PrintLn(expr):
+                # PrintLn can accept any type
+                self._check_node(expr, scope)
+                return "void"
+                
+            case StrConversion(expr):
+                # str() can convert int or string
+                expr_type = self._check_node(expr, scope)
+                if expr_type not in ["int", "string"]:
+                    self.errors.append(TypeCheckError(
+                        f"str() only supports int and string types, got {expr_type}", node))
+                return "string"
+                
+            case While(cond, body):
+                cond_type = self._check_node(cond, scope)
+                
+                # Condition must be a boolean
+                if cond_type != "bool":
+                    self.errors.append(TypeCheckError(
+                        f"While condition must be boolean, got '{cond_type}'", cond))
+                
+                # Check the loop body
+                self._check_node(body, scope)
+                return "void"
+                
+            case Array(elements):
+                if not elements:
+                    return "int[]"  # Default for empty arrays
+                    
+                # Check that all array elements have the same type
+                elem_types = [self._check_node(elem, scope) for elem in elements]
+                if len(set(elem_types)) != 1:
+                    self.errors.append(TypeCheckError(
+                        f"Array elements must have the same type, got {set(elem_types)}", node))
+                    return "unknown[]"
+                
+                return f"{elem_types[0]}[]"
+                
+            case ArrayAccess(array, index):
+                array_type = self._check_node(array, scope)
+                index_type = self._check_node(index, scope)
+                
+                # Check that index is an integer
+                if index_type != "int":
+                    self.errors.append(TypeCheckError(
+                        f"Array index must be int, got {index_type}", index))
+                
+                # Check that array is actually an array
+                if not array_type.endswith("[]"):
+                    self.errors.append(TypeCheckError(
+                        f"Cannot index into non-array type {array_type}", array))
+                    return "unknown"
+                
+                # Return element type
+                return array_type[:-2]  # Remove '[]'
+                
+            case _:
+                # Default case for other node types
+                return "unknown"
 
 class ReturnValue(Exception):
     def __init__(self, value):
@@ -212,10 +493,18 @@ def lookup(env, v):
     # Add built-in functions
     if v == "len":
         return ("x", "any", Length(Var("x")), "int")
-    env_reversed = reversed(env)
+    
+    # First check in local environment
+    env_reversed = list(reversed(env))
     for u, uv in env_reversed:
         if u == v:
             return uv
+    
+    # If not found, check in global environment (first binding in the environment)
+    for u, uv in env:
+        if u == v:
+            return uv
+    
     raise ValueError(f"Variable {v} not found")
 
 
@@ -226,6 +515,7 @@ def update_env(env, name, value):
             env[i] = (name, value)
             return
     env.append((name, value))
+
 def e(tree: AST, env=None) -> int | bool | str | list:
     if env is None:
         env = []  # Empty list for environment
@@ -239,30 +529,59 @@ def e(tree: AST, env=None) -> int | bool | str | list:
             return int(v)
         case Var(v):
             return lookup(env, v)
-        case Fun(f, a, at, rt, b, c):
-            # Store function definition with its type information
-            env.append((f, (a, at, b, rt)))  # Store param name, param type, body, return type
-            return e(c, env)
-        case Call(f, x):
-            param, param_type, body, return_type = lookup(env, f)  # Get function definition with types
-            arg_value = e(x, env)
-
-            # Add explicit conversion for string parameters if needed
-            if param_type == "string" and isinstance(arg_value, int):
-                arg_value = str(arg_value)
-            elif param_type == "int" and isinstance(arg_value, str):
-                raise TypeError(f"Function '{f}' expects int but got string")
-
-            try:
-                check_type(arg_value, param_type)
-            except TypeError as te:
-                raise TypeError(f"Function '{f}' parameter type mismatch: {str(te)}")
-
-            # Create function environment with access to outer scope
-            call_env = env.copy()  # Copy the outer environment to allow access to global vars
+        case Fun(f, params, rt, b, c):
+            # Create a closure with the current environment captured
+            # For recursive functions, we need to include the function name in its own environment
+            function_env = env.copy()
+            closure = Closure(params, b, rt, function_env)
             
-            # Add parameter binding - this will shadow any existing variable with same name
-            update_env(call_env, param, arg_value)
+            # Add the function to the environment BEFORE creating the closure
+            # This allows recursive calls to find the function
+            update_env(env, f, closure)
+            
+            # Store function name in closure's environment for recursion
+            update_env(closure.captured_env, f, closure)
+            
+            return e(c, env)
+        case Call(f, args):
+            # Get the function object
+            func_obj = lookup(env, f)
+            
+            # Evaluate arguments in the caller's environment
+            arg_values = [e(arg, env) for arg in args]
+            
+            if isinstance(func_obj, Closure):
+                # Handle closure with captured environment
+                params = func_obj.params
+                param_names = [param_name for param_name, _ in params]
+                param_types = [param_type for _, param_type in params]
+                body = func_obj.body
+                return_type = func_obj.return_type
+                
+                # Start with the captured environment from when function was defined
+                call_env = func_obj.captured_env.copy()
+                
+                # Check that the number of arguments matches the number of parameters
+                if len(arg_values) != len(params):
+                    raise TypeError(f"Function '{f}' expected {len(params)} arguments but got {len(arg_values)}")
+                
+                # Type checking and binding for all arguments
+                for i, ((param_name, param_type), arg_value) in enumerate(zip(params, arg_values)):
+                    if param_type == "string" and isinstance(arg_value, int):
+                        arg_value = str(arg_value)
+                    elif param_type == "int" and isinstance(arg_value, str):
+                        raise TypeError(f"Function '{f}' parameter {i+1} expects int but got string")
+                    
+                    try:
+                        check_type(arg_value, param_type)
+                    except TypeError as te:
+                        raise TypeError(f"Function '{f}' parameter {i+1} type mismatch: {str(te)}")
+                    
+                    # Add parameter binding to the closure environment
+                    update_env(call_env, param_name, arg_value)
+            
+            else:
+                raise TypeError(f"Cannot call {f}, not a function")
             
             try:
                 result = e(body, call_env)
@@ -319,15 +638,11 @@ def e(tree: AST, env=None) -> int | bool | str | list:
                 result = e(stmt, env)
             return result
         case Assign(name, expr):
-
             value = e(expr, env)
             update_env(env, name, value)
             return value
         case Let(var, expr, body):
-            # print(var)
-            # print("expression",expr)
             value = e(expr, env)  
-            # print("value",value)
             update_env(env, var, value)  # Update or add variable
             return e(body, env) 
         case Return(expr):
@@ -417,20 +732,16 @@ def e(tree: AST, env=None) -> int | bool | str | list:
         case DictAccess(dict, key):
             d = e(dict, env)
             k = e(key, env)
-            # print(d)
-            # print(f"Accessing key '{k}' in dict: {d}")
-            # if not isinstance(d, dict):
-            #     raise TypeError(f"Cannot access key in non-dict type {type(d).__name__}")
-            # print(f"Accessing key '{k}' in dict: {d}")
             return d[k]
         case DictAssign(dict, key, value):
             d = e(dict, env)
             k = e(key, env)
             v = e(value, env)
-            # if not isinstance(d, dict):
-            #     raise TypeError(f"Cannot assign key in non-dict type {type(d).__name__}")
             d[k] = v
             return v
+        case Closure(params, body, return_type, _):
+            # When a closure appears directly in code (not via Fun), capture the current env
+            return Closure(params, body, return_type, env.copy())
 
 def lex(s: str) -> Iterator[Token]:
     i = 0
@@ -569,24 +880,46 @@ def parse(s: str) -> AST:
                 return Let(var, expr, next_stmt if next_stmt else Sequence([]))
                 
             case KeywordToken("fun"):
-                next(t)
+                next(t)  # Consume "fun" keyword
+                
                 if not isinstance(t.peek(None), VarToken):
                     raise ParseError("Expected function name")
                 name = next(t).v
+                
                 expect(OperatorToken("("))
-
-                # Parse parameter name
-                if not isinstance(t.peek(None), VarToken):
-                    raise ParseError("Expected parameter name")
-                param = next(t).v
-
-                # Parse parameter type
-                expect(OperatorToken(":"))
-                if not isinstance(t.peek(None), TypeToken):
-                    raise ParseError("Expected parameter type")
-                param_token = next(t)
-                param_type = param_token.t + "[]" if param_token.is_array else param_token.t
-
+                
+                # Parse parameters - handle multiple parameters
+                params = []
+                
+                # If there's a first parameter
+                if isinstance(t.peek(None), VarToken):
+                    param_name = next(t).v
+                    
+                    # Parse parameter type
+                    expect(OperatorToken(":"))
+                    if not isinstance(t.peek(None), TypeToken):
+                        raise ParseError("Expected parameter type")
+                    param_token = next(t)
+                    param_type = param_token.t + "[]" if param_token.is_array else param_token.t
+                    
+                    params.append((param_name, param_type))
+                    
+                    # Parse additional parameters
+                    while t.peek(None) == OperatorToken(','):
+                        next(t)  # Consume comma
+                        
+                        if not isinstance(t.peek(None), VarToken):
+                            raise ParseError("Expected parameter name after comma")
+                        param_name = next(t).v
+                        
+                        expect(OperatorToken(":"))
+                        if not isinstance(t.peek(None), TypeToken):
+                            raise ParseError("Expected parameter type")
+                        param_token = next(t)
+                        param_type = param_token.t + "[]" if param_token.is_array else param_token.t
+                        
+                        params.append((param_name, param_type))
+                
                 expect(OperatorToken(")"))
 
                 # Handle return type
@@ -596,11 +929,20 @@ def parse(s: str) -> AST:
                 return_type = next(t).t
 
                 expect(OperatorToken("{"))
+                
+                # Parse the function body statements
                 body = parse_statements()
+                
                 expect(OperatorToken("}"))
+                
                 # Continue parsing after function definition
-                rest = parse_statements() if t.peek(None) is not None else body
-                return Fun(name, param, param_type, return_type, body, rest)
+                if t.peek(None) is not None and not (isinstance(t.peek(), OperatorToken) and t.peek().o == '}'):
+                    rest = parse_statements() 
+                else:
+                    rest = Sequence([])
+                    
+                return Fun(name, params, return_type, body, rest)
+                
             case KeywordToken("dict"):
                 next(t)
                 if not isinstance(t.peek(None), VarToken):
@@ -807,10 +1149,23 @@ def parse(s: str) -> AST:
                         return ArrayAssign(Var(name), index, value)
                     return ArrayAccess(Var(name), index)
                 elif isinstance(t.peek(None), OperatorToken) and t.peek().o == '(':
-                    next(t)
-                    arg = parse_expr()
-                    expect(OperatorToken(")"))
-                    return Call(name, arg)
+                    next(t)  # consume opening parenthesis
+                    args = []
+                    # Handle empty parameter list
+                    if isinstance(t.peek(None), OperatorToken) and t.peek().o == ')':
+                        next(t)  # consume closing parenthesis
+                    else:
+                        # Parse the first argument
+                        args.append(parse_expr())
+                        
+                        # Parse additional arguments
+                        while isinstance(t.peek(None), OperatorToken) and t.peek().o == ',':
+                            next(t)  # consume comma
+                            args.append(parse_expr())
+                        
+                        expect(OperatorToken(")"))
+                    
+                    return Call(name, args)
                 elif isinstance(t.peek(None), OperatorToken) and t.peek().o == '{':
                     next(t)  # consume {
                     key = parse_expr()
@@ -876,10 +1231,14 @@ class BytecodeInstruction:
     args: list = None
 
 class BytecodeCompiler:
+    # Static variable to store the last compiled variables map
+    last_variables = {}
+    
     def __init__(self):
         self.instructions = []
         self.constants = []
-        self.variables = {}
+        self.variables = {}  # Maps variable names to indices
+        self.global_vars = set()  # Track global variables
         self.labels = {}
         self.next_label = 0
         self.current_stack_size = 0
@@ -898,7 +1257,7 @@ class BytecodeCompiler:
         # Update stack size tracking
         if opcode in ['LOAD_CONST', 'LOAD_VAR', 'LOAD_GLOBAL']:
             self.current_stack_size += 1
-        elif opcode in ['STORE_VAR', 'POP_TOP']:
+        elif opcode in ['STORE_VAR', 'STORE_GLOBAL', 'POP_TOP']:
             self.current_stack_size -= 1
         elif opcode in ['BINARY_ADD', 'BINARY_SUB', 'BINARY_MUL', 'BINARY_DIV',
                        'BINARY_MOD', 'BINARY_POWER', 'BINARY_CONCAT']:
@@ -913,16 +1272,108 @@ class BytecodeCompiler:
         if value not in self.constants:
             self.constants.append(value)
         return self.constants.index(value)
+        
+    def mark_as_global(self, var_name):
+        """Mark a variable as global"""
+        self.global_vars.add(var_name)
+        
+    def is_global(self, var_name):
+        """Check if a variable is global"""
+        return var_name in self.global_vars
 
     def compile(self, ast):
         """Compile an AST into bytecode"""
+        # First pass: identify global variables
+        self._identify_globals(ast)
+        
+        # Second pass: compile with knowledge of globals
         self._compile_node(ast)
+        
+        # Store the variables mapping for the VM to use
+        BytecodeCompiler.last_variables = self.variables
+        
         return {
             'instructions': self.instructions,
             'constants': self.constants,
             'variables': self.variables,
+            'global_vars': self.global_vars,
             'max_stack': self.max_stack_size
         }
+        
+    def _identify_globals(self, node, scope=None):
+        """First pass to identify global variables"""
+        if scope is None:
+            scope = set()  # Initialize empty scope for tracking local variables
+            
+        if node is None:
+            return
+            
+        match node:
+            case Let(var, expr, body, _):
+                # Add variable to current scope
+                if var not in scope:
+                    self.global_vars.add(var)  # It's a global declaration
+                    
+                # Process the initializer expression
+                self._identify_globals(expr, scope)
+                
+                # Create a new scope for the body that includes this variable
+                new_scope = scope.copy()
+                new_scope.add(var)
+                self._identify_globals(body, new_scope)
+                
+            case Fun(n, params, rt, b, e):
+                # Add function name to current scope
+                if n not in scope:
+                    self.global_vars.add(n)  # It's a global function
+                    
+                # Process function body with new scope including parameters
+                func_scope = scope.copy()
+                for param_name, _ in params:
+                    func_scope.add(param_name)  # Parameters are local to function
+                self._identify_globals(b, func_scope)
+                
+                # Continue with code after function
+                self._identify_globals(e, scope)
+                
+            case Assign(name, expr):
+                # Check if name is in scope
+                if name not in scope:
+                    self.global_vars.add(name)  # It's a global assignment
+                self._identify_globals(expr, scope)
+                
+            case Var(name):
+                # Nothing to do for variable references
+                pass
+                
+            case BinOp(op, left, right):
+                self._identify_globals(left, scope)
+                self._identify_globals(right, scope)
+                
+            case If(cond, then, else_):
+                self._identify_globals(cond, scope)
+                self._identify_globals(then, scope)
+                self._identify_globals(else_, scope)
+                
+            case Sequence(statements):
+                for stmt in statements:
+                    self._identify_globals(stmt, scope)
+                    
+            case While(cond, body):
+                self._identify_globals(cond, scope)
+                self._identify_globals(body, scope)
+                
+            case Call(n, args):
+                for arg in args:
+                    self._identify_globals(arg, scope)
+                
+            case Return(expr):
+                self._identify_globals(expr, scope)
+                
+            # Handle other node types as needed
+            case _:
+                # For other node types, no specific action needed
+                pass
 
     def _compile_node(self, node):
         """Recursively compile a node in the AST"""
@@ -975,21 +1426,43 @@ class BytecodeCompiler:
                     self.emit(op_map[op])
             
             case Var(name):
-                if name not in self.variables:
-                    self.variables[name] = len(self.variables)
-                self.emit("LOAD_VAR", self.variables[name])
+                # Check if it's a global variable
+                if self.is_global(name):
+                    # Ensure it has an index
+                    if name not in self.variables:
+                        self.variables[name] = len(self.variables)
+                    self.emit("LOAD_GLOBAL", self.variables[name])
+                else:
+                    # It's a local variable
+                    if name not in self.variables:
+                        self.variables[name] = len(self.variables)
+                    self.emit("LOAD_VAR", self.variables[name])
             
             case Assign(name, expr):
                 self._compile_node(expr)
-                if name not in self.variables:
-                    self.variables[name] = len(self.variables)
-                self.emit("STORE_VAR", self.variables[name])
+                
+                # Check if it's a global variable
+                if self.is_global(name):
+                    if name not in self.variables:
+                        self.variables[name] = len(self.variables)
+                    self.emit("STORE_GLOBAL", self.variables[name])
+                else:
+                    # It's a local variable
+                    if name not in self.variables:
+                        self.variables[name] = len(self.variables)
+                    self.emit("STORE_VAR", self.variables[name])
             
             case Let(var, expr, body, _):
                 self._compile_node(expr)
                 if var not in self.variables:
                     self.variables[var] = len(self.variables)
-                self.emit("STORE_VAR", self.variables[var])
+                
+                # Store in the correct context (local or global)
+                if self.is_global(var):
+                    self.emit("STORE_GLOBAL", self.variables[var])
+                else:
+                    self.emit("STORE_VAR", self.variables[var])
+                
                 self._compile_node(body)
             
             case If(cond, then, else_):
@@ -1031,7 +1504,8 @@ class BytecodeCompiler:
                         self.emit("POP_TOP")
             
             case _:
-                raise NotImplementedError(f"Bytecode compilation not implemented for {type(node)}")
+                # Handle by the enhanced compile node
+                enhanced_compile_node(self, node)
 
     def _compile_function(self, node):
         """Compile a function definition"""
@@ -1044,8 +1518,8 @@ class BytecodeCompiler:
         end_label = self.get_label()
         
         # Store function metadata in constants pool
-        # (label, param_name, return_type)
-        func_meta = (func_label, node.a, node.rt)
+        # (label, params, return_type)
+        func_meta = (func_label, node.params, node.rt)
         func_meta_idx = self.add_constant(func_meta)
         
         # Create a function object and store it in the variable
@@ -1059,12 +1533,13 @@ class BytecodeCompiler:
         # Function body starts here
         self.emit("LABEL", func_label)
         
-        # Add parameter to variables
-        if node.a not in self.variables:
-            self.variables[node.a] = len(self.variables)
-        
-        # Store the parameter value passed on the stack
-        self.emit("STORE_VAR", self.variables[node.a])
+        # Store the parameter values passed on the stack
+        # These parameters will be pushed onto the stack by CALL_FUNCTION
+        # Note: The parameters are already on the stack at this point, put there by CALL_FUNCTION
+        for param_name, _ in reversed(node.params):
+            if param_name not in self.variables:
+                self.variables[param_name] = len(self.variables)
+            self.emit("STORE_VAR", self.variables[param_name])
         
         # Compile the function body
         self._compile_node(node.b)
@@ -1086,11 +1561,12 @@ class BytecodeCompiler:
             self.variables[node.n] = len(self.variables)
         self.emit("LOAD_VAR", self.variables[node.n])
         
-        # Evaluate and push argument
-        self._compile_node(node.a)
+        # Evaluate and push arguments
+        for arg in node.args:
+            self._compile_node(arg)
         
         # Call the function
-        self.emit("CALL_FUNCTION", 1)  # 1 argument
+        self.emit("CALL_FUNCTION", len(node.args))  # Number of arguments
 
     def _compile_return(self, node):
         """Compile a return statement"""
@@ -1107,6 +1583,10 @@ class BytecodeVM:
         self.constants = bytecode['constants']
         # Initialize variables array with None values for all variables
         self.variables = [None] * max(len(bytecode['variables']) + 1, 1)
+        # Store global variables set
+        self.global_vars = bytecode['global_vars']
+        # Create a separate globals dict for global variable access
+        self.globals = {}
         self.stack = []
         self.ip = 0  # Instruction pointer
         self.call_stack = []  # For function calls
@@ -1131,16 +1611,53 @@ class BytecodeVM:
                 
                 elif opcode == "LOAD_VAR":
                     var_idx = args[0]
+                    # For regular variables, we use the local vars first then fallback to globals
                     if var_idx >= len(self.variables) or self.variables[var_idx] is None:
-                        raise ValueError(f"Variable at index {var_idx} not initialized")
-                    self.stack.append(self.variables[var_idx])
+                        # Check if it's a global variable
+                        var_name = self._get_var_name(var_idx)
+                        if var_name in self.globals:
+                            self.stack.append(self.globals[var_name])
+                        else:
+                            raise ValueError(f"Variable at index {var_idx} not initialized")
+                    else:
+                        self.stack.append(self.variables[var_idx])
+                
+                elif opcode == "LOAD_GLOBAL":
+                    var_idx = args[0]
+                    var_name = self._get_var_name(var_idx)
+                    # For global variables, we directly look in the globals dictionary
+                    if var_name in self.globals:
+                        self.stack.append(self.globals[var_name])
+                    else:
+                        raise ValueError(f"Global variable {var_name} not initialized")
                 
                 elif opcode == "STORE_VAR":
                     var_idx = args[0]
+                    var_name = self._get_var_name(var_idx)
+                    value = self.stack.pop()
+                    
+                    # Expand variables array if needed
                     if var_idx >= len(self.variables):
-                        # Expand variables array if needed
                         self.variables.extend([None] * (var_idx - len(self.variables) + 1))
-                    self.variables[var_idx] = self.stack.pop()
+                    
+                    # Store in the local variables array
+                    self.variables[var_idx] = value
+                    
+                    # If on the top frame and it's a global, also store in globals
+                    if not self.call_stack and var_name in self.global_vars:
+                        self.globals[var_name] = value
+                
+                elif opcode == "STORE_GLOBAL":
+                    var_idx = args[0]
+                    var_name = self._get_var_name(var_idx)
+                    value = self.stack.pop()
+                    
+                    # Store in both the globals dict and the variables array
+                    self.globals[var_name] = value
+                    
+                    if var_idx >= len(self.variables):
+                        self.variables.extend([None] * (var_idx - len(self.variables) + 1))
+                    self.variables[var_idx] = value
                 
                 elif opcode == "BINARY_ADD":
                     right = self.stack.pop()
@@ -1332,51 +1849,65 @@ class BytecodeVM:
 
                 elif opcode == "CALL_FUNCTION":
                     num_args = args[0]
-                    # Pop arguments (we only support 1 arg for now)
-                    arg_val = self.stack.pop()
-                    
+                    # Pop arguments in reverse order
+                    arg_vals = [self.stack.pop() for _ in range(num_args)]
+                    arg_vals.reverse()  # Reverse to get correct argument order
+
                     # Pop function object (metadata tuple)
                     func_obj = self.stack.pop()
-                    
+
                     if not isinstance(func_obj, tuple) or len(func_obj) != 3:
                         raise TypeError(f"Cannot call {func_obj}")
-                    
+
                     # Unpack function metadata
-                    func_label, param_name, return_type = func_obj
-                    
+                    func_label, params, return_type = func_obj
+
+                    # Check that number of arguments matches number of parameters
+                    if len(arg_vals) != len(params):
+                        raise TypeError(f"Function expected {len(params)} arguments but got {len(arg_vals)}")
+
                     # Save current instruction pointer for return
                     return_ip = self.ip
-                    
-                    # Push argument for the function
-                    self.stack.append(arg_val)
-                    
+
+                    # Create a new variables array for the function call
+                    # This preserves lexical scoping - local variables don't affect parent scope
+                    new_vars = [None] * len(self.variables)
+
+                    # Save current context to call stack (to restore on return)
+                    self.call_stack.append((return_ip, self.variables))
+
+                    # Set the new variables array as active
+                    self.variables = new_vars
+
+                    # Push arguments onto the stack for the function body to access
+                    for arg_val in arg_vals:
+                        self.stack.append(arg_val)
+
                     # Jump to function body
                     self.ip = self._find_label(func_label)
-                    
-                    # Save current state to call stack
-                    self.call_stack.append((return_ip, self.variables.copy()))
-                    
+
                 elif opcode == "RETURN_VALUE":
                     # Get return value
                     return_value = self.stack.pop()
-                    
+
                     # Restore calling context if there's a saved context
                     if self.call_stack:
                         # Pop the last call frame
                         return_ip, saved_variables = self.call_stack.pop()
-                        
+
                         # Restore variables from before the call
                         self.variables = saved_variables
-                        
+
                         # Jump back to caller
                         self.ip = return_ip
-                        
+
                         # Push return value onto stack for caller
                         self.stack.append(return_value)
                     else:
                         # Top-level return or end of program
                         self.stack.append(return_value)
                         self.ip = len(self.instructions)  # Exit execution
+                
                 else:
                     raise ValueError(f"Unknown opcode: {opcode}")
             
@@ -1395,6 +1926,13 @@ class BytecodeVM:
             if instr.opcode == "LABEL" and instr.args[0] == label:
                 return i
         raise ValueError(f"Label not found: {label}")
+        
+    def _get_var_name(self, var_idx):
+        """Get variable name from index (reverse lookup in variables map)"""
+        for name, idx in BytecodeCompiler.last_variables.items():
+            if idx == var_idx:
+                return name
+        return f"var{var_idx}"  # Fallback if name not found
 
 # Add additional bytecode-related methods to compiler
 def _compile_array(self, node):
@@ -1448,8 +1986,8 @@ def _compile_function(self, node):
     end_label = self.get_label()
     
     # Store function metadata in constants pool
-    # (label, param_name, return_type)
-    func_meta = (func_label, node.a, node.rt)
+    # (label, params, return_type)
+    func_meta = (func_label, node.params, node.rt)
     func_meta_idx = self.add_constant(func_meta)
     
     # Create a function object and store it in the variable
@@ -1463,12 +2001,13 @@ def _compile_function(self, node):
     # Function body starts here
     self.emit("LABEL", func_label)
     
-    # Add parameter to variables
-    if node.a not in self.variables:
-        self.variables[node.a] = len(self.variables)
-    
-    # Store the parameter value passed on the stack
-    self.emit("STORE_VAR", self.variables[node.a])
+    # Store the parameter values passed on the stack
+    # These parameters will be pushed onto the stack by CALL_FUNCTION
+    # Note: The parameters are already on the stack at this point, put there by CALL_FUNCTION
+    for param_name, _ in reversed(node.params):
+        if param_name not in self.variables:
+            self.variables[param_name] = len(self.variables)
+        self.emit("STORE_VAR", self.variables[param_name])
     
     # Compile the function body
     self._compile_node(node.b)
@@ -1490,11 +2029,12 @@ def _compile_call(self, node):
         self.variables[node.n] = len(self.variables)
     self.emit("LOAD_VAR", self.variables[node.n])
     
-    # Evaluate and push argument
-    self._compile_node(node.a)
+    # Evaluate and push arguments
+    for arg in node.args:
+        self._compile_node(arg)
     
     # Call the function
-    self.emit("CALL_FUNCTION", 1)  # 1 argument
+    self.emit("CALL_FUNCTION", len(node.args))  # Number of arguments
 
 def _compile_return(self, node):
     """Compile a return statement"""
@@ -1554,9 +2094,9 @@ def enhanced_compile_node(self, node):
             self._compile_length(node)
         case Slice(sequence, start, end):
             self._compile_slice(node)
-        case Fun(n, a, at, rt, b, e):
+        case Fun(n, params, rt, b, e):
             self._compile_function(node)
-        case Call(n, a):
+        case Call(n, args):
             self._compile_call(node)
         case Return(expr):
             self._compile_return(node)
@@ -1642,80 +2182,25 @@ def _compile_while(self, node):
 # Add this method to the BytecodeCompiler class
 BytecodeCompiler._compile_while = _compile_while
 
-# def test_slice_array():
-code = """
-            int x = 1;
-            int z = 100;
-            fun foo(y : int) : int{
-                x = 2;
-                println(z);
-                return x;
-            }
-            println(foo(10));
-            println(z);
-            println(x);
-        """
-
-# code2 = """
-# fun add(a: int, b: int): int {
-#     return a + b;
-# }
-# dict d = {"sum": add(3, 4)};
-# int result = d{"sum"};
-# println(result);
-# """
-
-code3="""
-            int[] arr = [10, 20, 30];
-            int[] slice = arr[0:2];
-            slice[0]=100;
-            println(slice[0]);
-            println(arr[0]);
-            """
-ast = parse(code3)
-print(e(ast))
-
-
-# def run_test_case(code, expected_output):
-#     from io import StringIO
-#     import sys
-#     print("yes")
-#     # Redirect stdout to capture print statements
-#     old_stdout = sys.stdout
-#     sys.stdout = StringIO()
+def compile_with_static_type_check(code_string):
+    """
+    Parse, statically type check, and compile code.
+    Returns the bytecode or raises TypeCheckError if type check fails.
+    """
+    # Parse code to AST
+    ast = parse(code_string)
     
-#     try:
-#         print("2")
-#         ast = parse(code)
-#        
-#         e(ast)
-#         actual_output = sys.stdout.getvalue().strip()
-#         print(f"Expected: {expected_output}, Got: {actual_output}")
-#         assert actual_output == expected_output, f"Expected: {expected_output}, Got: {actual_output}"
-#         return "Test passed"
-#     except Exception as ex:
-#         return f"Test failed: {ex}"
-#     finally:
-#         sys.stdout = old_stdout
-
-# test_slice_array()
-# Modify the main entry point to support interpretation or compilation
-# if __name__ == "__main__":
-#     import sys
-#     if len(sys.argv) > 1:
-#         filename = sys.argv[1]
-#         mode = sys.argv[2] if len(sys.argv) > 2 else "interpret"
-        
-#         with open(filename, 'r') as f:
-#             code = f.read()
-        
-#         ast = parse(code)
-#         if mode == "compile":
-#             # Compile and run with bytecode VM
-#             compile_and_run(ast)
-#         else:
-#             # Use the interpreter
-#             e(ast)
-#     else:
-#         from tests.unit_tests import run_tests
-#         run_tests()
+    # Perform static type checking
+    type_checker = TypeChecker()
+    try:
+        type_checker.check(ast)
+        print("Static type check passed!")
+    except TypeCheckError as e:
+        print(f"Type error: {e}")
+        raise
+    
+    # If type check passes, compile to bytecode
+    compiler = BytecodeCompiler()
+    bytecode = compiler.compile(ast)
+    
+    return bytecode

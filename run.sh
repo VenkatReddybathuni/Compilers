@@ -2,15 +2,19 @@
 
 # Enhanced script to run files in our custom language
 # Usage: ./run.sh filename.txt [debug]
+# Note: Type checking is now mandatory for all executions
 
 COMPILER_DIR="/home/venkat/Desktop/Compilers"
 CODE_FILE="$1"
-DEBUG_MODE="$2"
+RUN_OPTION="$2"
 
 # Check if a file argument was provided
 if [ -z "$CODE_FILE" ]; then
   echo "Usage: $0 <source_file> [debug]"
   echo "Example: $0 euler.txt"
+  echo "Options:"
+  echo "  debug     - Enable VM debugging output"
+  echo "Note: Static type checking is now mandatory for all code execution"
   exit 1
 fi
 
@@ -36,37 +40,44 @@ sys.stdout.reconfigure(line_buffering=True, write_through=True)
 sys.path.append('${COMPILER_DIR}')
 
 # Import required components
-from main import parse, BytecodeCompiler, BytecodeVM
+from main import parse, BytecodeCompiler, BytecodeVM, TypeChecker, TypeCheckError, compile_with_static_type_check
 
-def run_file(filename, debug=False):
+def run_file(filename, option=None):
     """Run a file with bytecode VM with reliable output flushing"""
     try:
         # Read the source code
         with open(filename, 'r') as f:
             code = f.read()
         
-        print(f"Running {filename} with bytecode VM...")
-        if debug:
+        print(f"Running {filename} with mandatory type checking...")
+        debug_mode = option == "debug"
+        
+        if debug_mode:
             print("Debug mode enabled")
         
-        # Parse and compile
+        # Parse and compile with mandatory type checking
         start_time = time()
-        ast = parse(code)
-        compiler = BytecodeCompiler()
-        bytecode = compiler.compile(ast)
+        
+        # Always run static type checking
+        try:
+            bytecode = compile_with_static_type_check(code)
+            print("Code type-checked successfully!")
+        except TypeCheckError as e:
+            print(f"Type Error: {e}")
+            return 1
         
         # Run the program
         vm = BytecodeVM(bytecode)
         
         # Set debugging mode for VM if requested
-        if debug:
+        if debug_mode:
             vm.debug = True
         
         result = vm.run()
         end_time = time()
         
         # Print execution stats
-        if debug:
+        if debug_mode:
             print(f"\nExecution completed in {end_time - start_time:.4f} seconds")
         
         return 0
@@ -77,15 +88,15 @@ def run_file(filename, debug=False):
         return 1
 
 if __name__ == "__main__":
-    debug = len(sys.argv) > 2 and sys.argv[2] == "debug"
-    sys.exit(run_file(sys.argv[1], debug))
+    option = sys.argv[2] if len(sys.argv) > 2 else None
+    sys.exit(run_file(sys.argv[1], option))
 EOF
 
 # Make the wrapper script executable
 chmod +x "$COMPILER_DIR/run_now.py"
 
 # Run the program with Python unbuffered output
-PYTHONUNBUFFERED=1 python3 -u "$COMPILER_DIR/run_now.py" "$CODE_FILE" "$DEBUG_MODE"
+PYTHONUNBUFFERED=1 python3 -u "$COMPILER_DIR/run_now.py" "$CODE_FILE" "$RUN_OPTION"
 
 # Clean up
 rm "$COMPILER_DIR/run_now.py"
