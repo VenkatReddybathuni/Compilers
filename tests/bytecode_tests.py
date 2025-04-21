@@ -360,20 +360,85 @@ def test_dictionaries():
     expected8 = "two"
     run_bytecode_test(code8, expected8)
     
-    # Complex dictionary operations
-    # print("Testing complex dictionary operations...")
+    # Dictionary with lists as values
+    # print("Testing dictionary with list values...")
     # code9 = """
-    # dict users = {
-    #     "user1": {"name": "Alice", "age": 30},
-    #     "user2": {"name": "Bob", "age": 25}
+    # dict inventory = {
+    #     "weapons": [1, 2, 3],
+    #     "potions": [10, 20]
     # };
+    # println(inventory{"weapons"}[1]);
+    # println(inventory{"potions"}[0]);
     
-    # string user = "user1";
-    # dict userData = users{user};
-    # println(userData{"name"} ++ " is " ++ str(userData{"age"}));
+    # # Modify list inside dictionary
+    # inventory{"weapons"}[2] = 99;
+    # println(inventory{"weapons"}[2]);
     # """
-    # expected9 = "Alice is 30"
+    # expected9 = "2\n10\n99"
     # run_bytecode_test(code9, expected9)
+
+def test_multidimensional_arrays():
+    print("\n===== Testing Multidimensional Arrays =====")
+    
+    # Basic 2D array creation and access
+    print("Testing 2D array creation and access...")
+    code1 = """
+    int[][] matrix = [[1, 2, 3], [4, 5, 6], [7, 8, 9]];
+    println(matrix[1][2]);
+    """
+    expected1 = "6"
+    run_bytecode_test(code1, expected1)
+    
+    # Nested array element assignment
+    print("Testing nested array element assignment...")
+    code2 = """
+    int[][] grid = [[1, 2], [3, 4]];
+    grid[0][1] = 99;
+    println(grid[0][1]);
+    """
+    expected2 = "99"
+    run_bytecode_test(code2, expected2)
+    
+    # 3D array access
+    print("Testing 3D array access...")
+    code3 = """
+    int[][][] cube = [[[1, 2], [3, 4]], [[5, 6], [7, 8]]];
+    println(cube[1][0][1]);
+    """
+    expected3 = "6"
+    run_bytecode_test(code3, expected3)
+    
+    # Array operations with nested access
+    print("Testing nested array calculations...")
+    code4 = """
+    int[][] data = [[10, 20], [30, 40]];
+    int result = data[0][0] + data[1][1];
+    println(result);
+    """
+    expected4 = "50"
+    run_bytecode_test(code4, expected4)
+    
+    # Modifying nested arrays in loops
+    print("Testing nested array modification in loops...")
+    code5 = """
+    int[][] grid = [[0, 0], [0, 0]];
+    int i = 0;
+    while (i < 2) {
+        int j = 0;
+        while (j < 2) {
+            grid[i][j] = i * 2 + j;
+            j = j + 1;
+        }
+        i = i + 1;
+    }
+    
+    println(grid[0][0]);
+    println(grid[0][1]);
+    println(grid[1][0]);
+    println(grid[1][1]);
+    """
+    expected5 = "0\n1\n2\n3"
+    run_bytecode_test(code5, expected5)
 
 # Update the run_tests function to include the dictionary test
 def run_tests():
@@ -385,6 +450,7 @@ def run_tests():
         test_loops()
         test_arrays()
         test_dictionaries()  
+        test_multidimensional_arrays()
         print("\nAll bytecode compilation tests passed!")
     except AssertionError as e:
         print(f"\nTest failed: {e}")

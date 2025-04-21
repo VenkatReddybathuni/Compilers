@@ -96,12 +96,12 @@ class Array(AST):
 @dataclass
 class ArrayAccess(AST):
     array: AST
-    index: AST
+    indices: list[AST]  # Changed from single index to list of indices for multi-dimensional access
 
 @dataclass
 class ArrayAssign(AST):
     array: AST
-    index: AST
+    indices: list[AST]  # Changed from single index to list of indices
     value: AST
 
 @dataclass
@@ -156,6 +156,7 @@ class StringToken(Token):
 class TypeToken(Token):
     t: str
     is_array: bool = False  # Add array type flag
+    array_dimensions: int = 0  # Track number of dimensions for nd arrays
 
 @dataclass
 class ArrayToken(Token):
@@ -413,14 +414,14 @@ class TypeChecker:
                 
                 return f"{elem_types[0]}[]"
                 
-            case ArrayAccess(array, index):
+            case ArrayAccess(array, indices):
                 array_type = self._check_node(array, scope)
-                index_type = self._check_node(index, scope)
+                index_types = [self._check_node(index, scope) for index in indices]
                 
-                # Check that index is an integer
-                if index_type != "int":
+                # Check that all indices are integers
+                if not all(index_type == "int" for index_type in index_types):
                     self.errors.append(TypeCheckError(
-                        f"Array index must be int, got {index_type}", index))
+                        f"Array indices must be int, got {index_types}", indices))
                 
                 # Check that array is actually an array
                 if not array_type.endswith("[]"):
@@ -682,17 +683,21 @@ def e(tree: AST, env=None) -> int | bool | str | list:
                 elif base_type == "string" and not all(isinstance(x, str) for x in values):
                     raise TypeError("Array elements must be string")
             return values
-        case ArrayAccess(array, index):
+        case ArrayAccess(array, indices):
             arr = e(array, env)
-            idx = e(index, env)
-            if isinstance(arr, (list, str)):
-                if 0 <= idx < len(arr):
-                    return arr[idx]
-                raise IndexError("Array index out of bounds")
-            raise TypeError(f"Cannot index into {type(arr).__name__}")
-        case ArrayAssign(array, index, value):
+            idxs = [e(index, env) for index in indices]
+            for idx in idxs:
+                if isinstance(arr, (list, str)):
+                    if 0 <= idx < len(arr):
+                        arr = arr[idx]
+                    else:
+                        raise IndexError("Array index out of bounds")
+                else:
+                    raise TypeError(f"Cannot index into {type(arr).__name__}")
+            return arr
+        case ArrayAssign(array, indices, value):
             arr = e(array, env)
-            idx = e(index, env)
+            idxs = [e(index, env) for index in indices]
             val = e(value, env)
             
             # Find array type from environment
@@ -710,11 +715,23 @@ def e(tree: AST, env=None) -> int | bool | str | list:
                                     raise TypeError("Cannot assign non-string to string[]")
                         break
 
-            if not isinstance(idx, int):
+            for idx in idxs[:-1]:
+                if not isinstance(idx, int):
+                    raise TypeError("Array index must be integer")
+                if isinstance(arr, list):
+                    if 0 <= idx < len(arr):
+                        arr = arr[idx]
+                    else:
+                        raise IndexError("Array index out of bounds")
+                else:
+                    raise TypeError("Cannot assign to non-array type")
+            
+            final_idx = idxs[-1]
+            if not isinstance(final_idx, int):
                 raise TypeError("Array index must be integer")
             if isinstance(arr, list):
-                if 0 <= idx < len(arr):
-                    arr[idx] = val
+                if 0 <= final_idx < len(arr):
+                    arr[final_idx] = val
                     return val
                 raise IndexError("Array index out of bounds")
             raise TypeError("Cannot assign to non-array type")
@@ -764,14 +781,16 @@ def lex(s: str) -> Iterator[Token]:
             # print(t)
             # Check if this is an array type (e.g. "int[]")
             is_array = False
-            if i + 1 < len(s) and s[i] == '[' and s[i + 1] == ']':
+            array_dimensions = 0
+            while i + 1 < len(s) and s[i] == '[' and s[i + 1] == ']':
                 is_array = True
+                array_dimensions += 1
                 i += 2
                 
             if t in {"and", "or", "if", "else", "fun", "return", "println", "str", "while", "continue", "break", "dict"}:  # Added while, continue, break
                 yield KeywordToken(t)
             elif t in {"int", "float", "string", "void", "bool"}:  # Types are now handled separately
-                yield TypeToken(t, is_array)
+                yield TypeToken(t, is_array, array_dimensions)
             else:
                 yield VarToken(t)
         elif s[i].isdigit():
@@ -847,12 +866,12 @@ def parse(s: str) -> AST:
     def parse_stmt():
         # print(f"parse_stmt: {t.peek(None)}")  # Debugging statement
         match t.peek(None):
-            case TypeToken(typ, is_array):
+            case TypeToken(typ, is_array, array_dimensions):
                 next(t)
                 if not isinstance(t.peek(None), VarToken):
                     raise ParseError(f"Expected variable name after {typ}")
                 var = next(t).v
-                var_type = f"{typ}[]" if is_array else typ
+                var_type = f"{typ}{'[]' * array_dimensions}" if is_array else typ
                 expect(OperatorToken("="))
                 
                 if is_array:
@@ -903,7 +922,7 @@ def parse(s: str) -> AST:
                     if not isinstance(t.peek(None), TypeToken):
                         raise ParseError("Expected parameter type")
                     param_token = next(t)
-                    param_type = param_token.t + "[]" if param_token.is_array else param_token.t
+                    param_type = param_token.t + "[]" * param_token.array_dimensions if param_token.is_array else param_token.t
                     
                     params.append((param_name, param_type))
                     
@@ -919,7 +938,7 @@ def parse(s: str) -> AST:
                         if not isinstance(t.peek(None), TypeToken):
                             raise ParseError("Expected parameter type")
                         param_token = next(t)
-                        param_type = param_token.t + "[]" if param_token.is_array else param_token.t
+                        param_type = param_token.t + "[]" * param_token.array_dimensions if param_token.is_array else param_token.t
                         
                         params.append((param_name, param_type))
                 
@@ -1138,19 +1157,24 @@ def parse(s: str) -> AST:
             case VarToken(name):
                 next(t)
                 if isinstance(t.peek(None), OperatorToken) and t.peek().o == '[':
+                    indices = []
+                    # First dimension
                     next(t)  # consume [
-                    index = parse_expr()
-                    if isinstance(t.peek(None), OperatorToken) and t.peek().o == ':':
-                        next(t)  # consume :
-                        end = parse_expr()
-                        expect(OperatorToken(']'))
-                        return Slice(Var(name), index, end)
+                    indices.append(parse_expr())
                     expect(OperatorToken(']'))
+                    
+                    # Additional dimensions if any
+                    while isinstance(t.peek(None), OperatorToken) and t.peek().o == '[':
+                        next(t)  # consume [
+                        indices.append(parse_expr())
+                        expect(OperatorToken(']'))
+                    
                     if isinstance(t.peek(None), OperatorToken) and t.peek().o == '=':
                         next(t)  # consume =
                         value = parse_expr()
-                        return ArrayAssign(Var(name), index, value)
-                    return ArrayAccess(Var(name), index)
+                        return ArrayAssign(Var(name), indices, value)
+                    return ArrayAccess(Var(name), indices)
+                    
                 elif isinstance(t.peek(None), OperatorToken) and t.peek().o == '(':
                     next(t)  # consume opening parenthesis
                     args = []
@@ -1980,15 +2004,28 @@ def _compile_array(self, node):
     self.emit("CREATE_ARRAY", len(node.elements))
 
 def _compile_array_access(self, node):
-    """Compile array access expression"""
+    """Compile array access expression with support for multi-dimensional arrays"""
+    # First load the base array
     self._compile_node(node.array)
-    self._compile_node(node.index)
-    self.emit("LOAD_ARRAY_ITEM")
+    
+    # For each dimension, load the index and access the array
+    for i, index in enumerate(node.indices):
+        self._compile_node(index)
+        self.emit("LOAD_ARRAY_ITEM")
+        # No need for additional handling after loading the last dimension
 
 def _compile_array_assign(self, node):
-    """Compile array element assignment"""
+    """Compile array element assignment with support for multi-dimensional arrays"""
+    # First load the base array
     self._compile_node(node.array)
-    self._compile_node(node.index)
+    
+    # For each dimension except the last, load the index and access the array
+    for i, index in enumerate(node.indices[:-1]):
+        self._compile_node(index)
+        self.emit("LOAD_ARRAY_ITEM")
+    
+    # For the last dimension, we'll use STORE_ARRAY_ITEM
+    self._compile_node(node.indices[-1])
     self._compile_node(node.value)
     self.emit("STORE_ARRAY_ITEM")
 
@@ -2124,9 +2161,9 @@ def enhanced_compile_node(self, node):
     match node:
         case Array(elements):
             self._compile_array(node)
-        case ArrayAccess(array, index):
+        case ArrayAccess(array, indices):
             self._compile_array_access(node)
-        case ArrayAssign(array, index, value):
+        case ArrayAssign(array, indices, value):
             self._compile_array_assign(node)
         case Length(expr):
             self._compile_length(node)
