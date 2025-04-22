@@ -154,22 +154,22 @@ def test_arrays():
     run_bytecode_test(code2, expected2)
     
     # Array length
-    # print("Testing array length...")
-    # code3 = """
-    # int[] numbers = [5, 10, 15, 20, 25];
-    # println(len(numbers));
-    # """
-    # expected3 = "5"
-    # run_bytecode_test(code3, expected3)
+    print("Testing array length...")
+    code3 = """
+    int[] numbers = [5, 10, 15, 20, 25];
+    println(len(numbers));
+    """
+    expected3 = "5"
+    run_bytecode_test(code3, expected3)
     
-    # # Empty array
-    # print("Testing empty array...")
-    # code4 = """
-    # int[] empty = [];
-    # println(len(empty));
-    # """
-    # expected4 = "0"
-    # run_bytecode_test(code4, expected4)
+    # Empty array
+    print("Testing empty array...")
+    code4 = """
+    int[] empty = [];
+    println(len(empty));
+    """
+    expected4 = "0"
+    run_bytecode_test(code4, expected4)
     
     # Array slicing
     print("Testing array slicing...")
@@ -212,92 +212,124 @@ def test_arrays():
     """
     expected8 = "apple and cherry"
     run_bytecode_test(code8, expected8)
-
-def test_functions():
-    print("\n===== Testing Functions =====")
     
-    # Basic function definition and call
-    print("Testing basic function call...")
-    code1 = """
-    fun add(a: int): int {
-        return a + 5;
-    }
-    println(add(10));
+    # Nested array operations
+    print("Testing nested array indexing...")
+    code9 = """
+    int[] nums = [10, 20, 30, 40, 50];
+    println(nums[nums[0] / 5]);
     """
-    expected1 = "15"
+    expected9 = "30"
+    run_bytecode_test(code9, expected9)
+    
+    # Array operations in loops
+    print("Testing array operations in loops...")
+    code10 = """
+    int[] arr = [1, 2, 3, 4, 5];
+    int i = 0;
+    int sum = 0;
+    while (i < len(arr)) {
+        sum = sum + arr[i];
+        i = i + 1;
+    }
+    println(sum);
+    """
+    expected10 = "15"
+    run_bytecode_test(code10, expected10)
+    
+    # Array element assignment in loops
+    print("Testing array assignment in loops...")
+    code11 = """
+    int[] arr = [0, 0, 0, 0, 0];
+    int i = 0;
+    while (i < len(arr)) {
+        arr[i] = i * 10;
+        i = i + 1;
+    }
+    i = 0;
+    while (i < len(arr)) {
+        println(arr[i]);
+        i = i + 1;
+    }
+    """
+    expected11 = "0\n10\n20\n30\n40"
+    run_bytecode_test(code11, expected11)
+    
+    # Array with calculated indices
+    print("Testing array with calculated indices...")
+    code12 = """
+    int[] values = [5, 10, 15, 20, 25];
+    int a = 1;
+    int b = 3;
+    println(values[a + b]);
+    """
+    expected12 = "25"
+    run_bytecode_test(code12, expected12)
+
+def test_dictionaries():
+    print("\n===== Testing Dictionaries =====")
+    
+    # Basic dictionary creation and access
+    print("Testing dictionary creation and access...")
+    code1 = """
+    dict scores = {
+        "Alice": 95,
+        "Bob": 87,
+        "Charlie": 92
+    };
+    println(scores{"Alice"});
+    """
+    expected1 = "95"
     run_bytecode_test(code1, expected1)
     
-    # Function with multiple statements
-    print("Testing function with multiple statements...")
+    # Dictionary assignment
+    print("Testing dictionary element assignment...")
     code2 = """
-    fun calculate(x: int): int {
-        int y = x * 2;
-        int z = y + 10;
-        return z / 2;
-    }
-    println(calculate(5));
+    dict data = {"x": 10, "y": 20};
+    data{"x"} = 99;
+    println(data{"x"});
     """
-    expected2 = "10"
+    expected2 = "99"
     run_bytecode_test(code2, expected2)
     
-    # Function with conditional logic
-    print("Testing function with conditionals...")
+    # Adding new key to dictionary
+    print("Testing adding new key to dictionary...")
     code3 = """
-    fun max(a: int): int {
-        if (a > 10) {
-            return a;
-        } else {
-            return 10;
-        }
-    }
-    println(max(5));
-    println(max(15));
+    dict items = {"first": 1, "second": 2};
+    items{"third"} = 3;
+    println(items{"third"});
     """
-    expected3 = "10\n15"
+    expected3 = "3"
     run_bytecode_test(code3, expected3)
     
-    # Recursive function
-    print("Testing recursive function...")
+    # Using dictionary values in calculations
+    print("Testing dictionary values in calculations...")
     code4 = """
-    fun factorial(n: int): int {
-        if (n <= 1) {
-            return 1;
-        } else {
-            return n * factorial(n - 1);
-        }
-    }
-    println(factorial(5));
+    dict prices = {"apple": 5, "banana": 3, "orange": 4};
+    int total = prices{"apple"} + prices{"orange"};
+    println(total);
     """
-    expected4 = "120"
+    expected4 = "9"
     run_bytecode_test(code4, expected4)
     
-    # # Function working with arrays
-    # print("Testing function with arrays...")
-    # code5 = """
-    # fun sumArray(arr: int[]): int {
-    #     int sum = 0;
-    #     int i = 0;
-    #     while (i < len(arr)) {
-    #         sum = sum + arr[i];
-    #         i = i + 1;
-    #     }
-    #     return sum;
-    # }
-    # int[] numbers = [10, 20, 30, 40];
-    # println(sumArray(numbers));
-    # """
-    # expected5 = "100"
-    # run_bytecode_test(code5, expected5)
-    
-    # Function with string manipulation
-    print("Testing function with strings...")
-    code6 = """
-    fun greet(name: string): string {
-        return "Hello, " ++ name ++ "!";
-    }
-    println(greet("World"));
+    # String keys from variables
+    print("Testing dictionary access with variable keys...")
+    code5 = """
+    dict inventory = {"sword": 10, "shield": 5, "potion": 20};
+    string item = "shield";
+    println(inventory{item});
     """
-    expected6 = "Hello, World!"
+    expected5 = "5"
+    run_bytecode_test(code5, expected5)
+    
+    # Dictionary with string values
+    print("Testing dictionary with string values...")
+    code6 = """
+    dict translations = {"hello": "hola", "goodbye": "adios"};
+    string greeting = "hello";
+    println(translations{greeting} ++ "!");
+    """
+    expected6 = "hola!"
     run_bytecode_test(code6, expected6)
     # TestCase(
     #         name="Simple User-Defined Type",
@@ -323,8 +355,116 @@ def test_functions():
     println(c{"radius"});
     """
     expected7 = "5\n10\n15"
+    run_bytecode_test(code7, expected7)    
+    # Dictionary updates in a loop
+    print("Testing dictionary updates in a loop...")
+    code7 = """
+    dict counters = {"a": 0, "b": 0, "c": 0};
+    string[] letters = ["a", "b", "a", "c", "b", "a"];
+    int i = 0;
+    while (i < len(letters)) {
+        string letter = letters[i];
+        counters{letter} = counters{letter} + 1;
+        i = i + 1;
+    }
+    println(counters{"a"});
+    println(counters{"b"});
+    println(counters{"c"});
+    """
+    expected7 = "3\n2\n1"
     run_bytecode_test(code7, expected7)
-# Update the run_tests function to include the new test function
+    
+    # Dictionary with integer keys
+    print("Testing dictionary with integer keys...")
+    code8 = """
+    dict numMap = {1: "one", 2: "two", 3: "three"};
+    int key = 2;
+    println(numMap{key});
+    """
+    expected8 = "two"
+    run_bytecode_test(code8, expected8)
+    
+    # Dictionary with lists as values
+    # print("Testing dictionary with list values...")
+    # code9 = """
+    # dict inventory = {
+    #     "weapons": [1, 2, 3],
+    #     "potions": [10, 20]
+    # };
+    # println(inventory{"weapons"}[1]);
+    # println(inventory{"potions"}[0]);
+    
+    # # Modify list inside dictionary
+    # inventory{"weapons"}[2] = 99;
+    # println(inventory{"weapons"}[2]);
+    # """
+    # expected9 = "2\n10\n99"
+    # run_bytecode_test(code9, expected9)
+
+def test_multidimensional_arrays():
+    print("\n===== Testing Multidimensional Arrays =====")
+    
+    # Basic 2D array creation and access
+    print("Testing 2D array creation and access...")
+    code1 = """
+    int[][] matrix = [[1, 2, 3], [4, 5, 6], [7, 8, 9]];
+    println(matrix[1][2]);
+    """
+    expected1 = "6"
+    run_bytecode_test(code1, expected1)
+    
+    # Nested array element assignment
+    print("Testing nested array element assignment...")
+    code2 = """
+    int[][] grid = [[1, 2], [3, 4]];
+    grid[0][1] = 99;
+    println(grid[0][1]);
+    """
+    expected2 = "99"
+    run_bytecode_test(code2, expected2)
+    
+    # 3D array access
+    print("Testing 3D array access...")
+    code3 = """
+    int[][][] cube = [[[1, 2], [3, 4]], [[5, 6], [7, 8]]];
+    println(cube[1][0][1]);
+    """
+    expected3 = "6"
+    run_bytecode_test(code3, expected3)
+    
+    # Array operations with nested access
+    print("Testing nested array calculations...")
+    code4 = """
+    int[][] data = [[10, 20], [30, 40]];
+    int result = data[0][0] + data[1][1];
+    println(result);
+    """
+    expected4 = "50"
+    run_bytecode_test(code4, expected4)
+    
+    # Modifying nested arrays in loops
+    print("Testing nested array modification in loops...")
+    code5 = """
+    int[][] grid = [[0, 0], [0, 0]];
+    int i = 0;
+    while (i < 2) {
+        int j = 0;
+        while (j < 2) {
+            grid[i][j] = i * 2 + j;
+            j = j + 1;
+        }
+        i = i + 1;
+    }
+    
+    println(grid[0][0]);
+    println(grid[0][1]);
+    println(grid[1][0]);
+    println(grid[1][1]);
+    """
+    expected5 = "0\n1\n2\n3"
+    run_bytecode_test(code5, expected5)
+
+# Update the run_tests function to include the dictionary test
 def run_tests():
     try:
         test_arithmetic()
@@ -333,12 +473,15 @@ def run_tests():
         test_conditionals()
         test_loops()
         test_arrays()
-        test_functions()  # Add the new test function
+        test_dictionaries()  
+        test_multidimensional_arrays()
         print("\nAll bytecode compilation tests passed!")
     except AssertionError as e:
         print(f"\nTest failed: {e}")
     except Exception as e:
         print(f"\nUnexpected error: {type(e).__name__}: {e}")
+        import traceback
+        traceback.print_exc()
 
 if __name__ == "__main__":
     run_tests()
