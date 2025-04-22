@@ -3,130 +3,101 @@
 ## Core Features
 
 ### Control Flow
-* If-then-else expressions
-* While loops with break/continue
-* Function definitions with type annotations
+* If-then-else expressions with boolean conditions
+* While loops with break/continue statements
+* Function definitions with type annotations and return values
 * Let expressions for variable declarations
 * Return statements
-* Multiple statement blocks
+* Multiple statement blocks with proper scoping
 
 ### Type System
-* Static type checking
-* Basic types: `int`, `string`, `bool`
-* Array types: `int[]`, `string[]`
+* Static type checking at compile time
+* Basic types: `int`, `bool`, `string`
+* Array types with indexing and slicing: `int[]`, `string[]`, etc.
+* Multi-dimensional arrays: `int[][]`, etc.
+* Dictionary type with string keys: `dict`
+* User-defined types (structs) with field access
 * Type annotations for function parameters and return types
 * Explicit type conversion using `str()`
-* Array and string indexing
-* Built-in `len()` function for arrays and strings
+* Strong type checking with no implicit conversions
 
 ### Operations
 * Arithmetic: `+`, `-`, `*`, `/`, `%`, `**` (power)
 * String: `++` (concatenation with strict type checking)
 * Comparison: `<`, `>`, `<=`, `>=`, `==`, `!=`
 * Logical: `and`, `or`
+* Array concatenation using `+` operator
+* Array and string slicing using `[start:end]` syntax
 
-### Basic Syntax Examples
+### Data Structures
+* Arrays with indexing, slicing, and length operation
+* Dictionaries with string keys and arbitrary value types
+* User-defined types (structs) with named fields
+* Multi-dimensional arrays
 
-1. Variable Declarations and Types:
+### Advanced Features
+* First-class functions and closures
+* Function inlining optimization
+* Peephole optimization (constant folding)
+* Bytecode compilation for efficient execution
+* Proper lexical scoping
+* Variable capture in closures
+
+## User-Defined Functions
+
+Our language provides comprehensive support for user-defined functions, which are a central feature. Functions in our language have:
+
+### Function Definition and Calling
+
+Functions are defined using the `fun` keyword, with explicit parameter types and return type:
+
 ```python
-int x = 5;                  # Integer declaration
-string msg = "hello";       # String declaration
-```
-
-2. Arithmetic Operations:
-```python
-int a = 5 + 3;             # Addition
-int b = 10 - 2;            # Subtraction
-int c = 4 * 3;             # Multiplication
-int d = 15 / 3;            # Division (integer)
-int e = 17 % 5;            # Modulo
-int f = 2 ** 3;            # Power operation
-```
-
-3. String Operations:
-```python
-string s1 = "Hello";
-string s2 = " World";
-string s3 = s1 ++ s2;      # String concatenation
-string num = str(42);      # Integer to string conversion
-```
-
-4. Comparison Operations:
-```python
-x < y                      # Less than
-x > y                      # Greater than
-x <= y                     # Less than or equal
-x >= y                     # Greater than or equal
-x == y                     # Equal to
-x != y                     # Not equal to
-```
-
-5. Logical Operations:
-```python
-x > 0 and y < 10          # Logical AND
-x < 0 or y > 20           # Logical OR
-```
-
-6. Function Definitions:
-```python
-fun add(x : int) : int {
-    return x + 1;
+# Basic function definition
+fun add(x: int, y: int): int {
+    return x + y;
 }
 
-fun greet(name : string) : string {
-    return "Hello " ++ name;
-}
+# Calling the function
+int result = add(5, 10);
+println(result);  # Prints 15
 ```
 
-7. Control Flow:
-```python
-if (x > 0) {
-    println("Positive");
-} else {
-    println("Non-positive");
-}
+### Function Return Values
 
-while (x < 10) {
-    x = x + 1;
-    if (x == 5) {
-        continue;
+All functions must have a specified return type and appropriate return statements:
+
+```python
+fun max(a: int, b: int): int {
+    if (a > b) {
+        return a;
+    } else {
+        return b;
     }
-    if (x == 8) {
-        break;
+}
+```
+
+### Recursive Functions
+
+The language fully supports recursive function calls:
+
+```python
+fun factorial(n: int): int {
+    if (n <= 1) {
+        return 1;
+    } else {
+        return n * factorial(n-1);
     }
-    println(x);
 }
+
+println(factorial(5));  # Prints 120
 ```
 
-8. Multiple Statements and Scoping:
+### Functions with Arrays
+
+Functions can take arrays as parameters and return arrays:
+
 ```python
-fun process(x : int) : int {
-    int a = x + 1;
-    int b = a * 2;
-    return b;
-}
-```
-
-### Arrays and Indexing
-```python
-# Array Declaration and Initialization
-int[] numbers = [1, 2, 3, 4, 5];
-string[] words = ["hello", "world"];
-
-# Array Indexing
-println(numbers[0]);      # Access first element
-numbers[1] = 10;         # Modify element
-
-# String Indexing
-string text = "Hello";
-println(text[0]);        # Prints "H"
-
-# Array Length
-println(len(numbers));   # Prints 5
-println(len(text));      # Prints 5
-
-# Array in Functions
-fun sumArray(arr: int[]) : int {
+fun sumArray(arr: int[]): int {
     int sum = 0;
     int i = 0;
     while(i < len(arr)) {
@@ -135,432 +106,417 @@ fun sumArray(arr: int[]) : int {
     }
     return sum;
 }
+
+int[] numbers = [1, 2, 3, 4, 5];
+println(sumArray(numbers));  # Prints 15
+```
+
+### Function Closures
+
+The language supports closures, allowing functions to capture variables from their outer scope:
+
+```python
+fun makeAdder(x: int): (int) -> int {
+    # x is captured in the closure
+    fun add(y: int): int {
+        return x + y;  # x is from outer function
+    }
+    return add;
+}
+
+var addFive = makeAdder(5);
+println(addFive(10));  # Prints 15
+```
+
+### Proper Variable Scoping
+
+Functions create their own scope, and parameters are local to the function:
+
+```python
+int x = 1;
+fun foo(x: int): int {
+    x = 2;         # Changes local x, not global x
+    return x;
+}
+println(foo(x));   # Prints 2
+println(x);        # Prints 1 (global x is unchanged)
+```
+
+## User-Defined Types
+
+Our language supports custom data types through a struct-like syntax:
+
+### Type Definition and Creation
+
+```python
+# Define a Person type
+type Person { "name": string, "age": int };
+
+# Create an instance
+Person p = Person { "name": "Alice", "age": 30 };
+
+# Access fields
+println(p{"name"});  # Prints "Alice"
+println(p{"age"});   # Prints 30
+```
+
+### Field Modification
+
+Fields of user-defined types can be modified:
+
+```python
+type Counter { "value": int };
+Counter c = Counter { "value": 0 };
+
+# Update the field
+c{"value"} = c{"value"} + 1;
+println(c{"value"});  # Prints 1
+```
+
+### Nested Types
+
+Types can be nested within other types:
+
+```python
+type Point { "x": int, "y": int };
+type Circle { "center": Point, "radius": int };
+
+Circle c = Circle { 
+    "center": Point { "x": 5, "y": 10 }, 
+    "radius": 15 
+};
+
+println(c{"center"}{"x"});  # Prints 5
+```
+
+### Using Types with Functions
+
+Types can be used as function parameters and return values:
+
+```python
+type Rectangle { "width": int, "height": int };
+
+fun area(rect: Rectangle): int {
+    return rect{"width"} * rect{"height"};
+}
+
+Rectangle r = Rectangle { "width": 5, "height": 10 };
+println("Area: " ++ str(area(r)));  # Prints "Area: 50"
+```
+
+## Array Operations
+
+The language provides rich support for array manipulation:
+
+### Array Creation and Access
+
+```python
+# Array creation
+int[] numbers = [1, 2, 3, 4, 5];
+string[] words = ["hello", "world", "!"];
+
+# Array indexing (zero-based)
+println(numbers[0]);  # Prints 1
+println(words[0]);    # Prints "hello"
+
+# Array assignment
+numbers[1] = 10;
+words[1] = "WORLD";
+```
+
+### Array Length
+
+```python
+int[] arr = [1, 2, 3, 4, 5];
+println(len(arr));  # Prints 5
 ```
 
 ### Array Slicing
-```python
-int[] numbers = [1, 2, 3, 4, 5];
-int[] slicedNumbers = numbers[1:4];  # Slices the array from index 1 to 3
-println(slicedNumbers[0]);           # Prints 2
-println(slicedNumbers[1]);           # Prints 3
-println(slicedNumbers[2]);           # Prints 4
 
-# String Slicing
-string text = "hello world";
-string slicedText = text[1:5];       # Slices the string from index 1 to 4
-println(slicedText);                 # Prints "ello"
+```python
+int[] arr = [1, 2, 3, 4, 5];
+int[] sliced = arr[1:4];  # Creates [2, 3, 4]
 ```
 
-## Type Rules
+### Array Concatenation
 
-### String Operations
-* String concatenation (`++`) requires both operands to be strings
-* Use `str()` for explicit conversion of integers to strings
-* No implicit type conversion in string operations
-
-Example:
 ```python
-# Correct
-"Hello " ++ "World"          # Works
-"Number: " ++ str(42)        # Works
-
-# Incorrect
-"Error: " ++ 404             # Type Error
-"Code" ++ true              # Type Error
+int[] a = [1, 2, 3];
+int[] b = [4, 5, 6];
+int[] combined = a + b;  # Results in [1, 2, 3, 4, 5, 6]
 ```
 
-### Array Type Rules
-* Arrays must be initialized with elements of the correct type
-* Array indices must be integers
-* Array access is bounds-checked at runtime
-* Arrays can be passed to and returned from functions
-* Arrays maintain their type information (e.g., `int[]`)
+### Multi-dimensional Arrays
 
-Example:
 ```python
-# Correct array usage
-int[] arr = [1, 2, 3];
-arr[0] = 42;                # Works
-println(arr[1]);           # Works
-
-# Type errors
-int[] nums = ["hello"];    # Error: Array elements must be int
-arr[1] = "string";         # Error: Cannot assign string to int[]
-arr["index"];              # Error: Array index must be int
-
-# Bounds checking
-arr[5];                    # Runtime error: Index out of bounds
+int[][] matrix = [[1, 2, 3], [4, 5, 6], [7, 8, 9]];
+println(matrix[0][1]);  # Prints 2
 ```
 
-### Function Type Checking
-* Parameter types must match argument types
-* Return type is enforced
-* No implicit conversions in function calls
+## String Operations
 
-Example:
+Comprehensive string manipulation features:
+
+### String Concatenation
+
 ```python
-# Function definition with types
-fun greet(name : string) : string {
-    return "Hello " ++ name ++ "!";
+string greeting = "Hello";
+string target = "World";
+string message = greeting ++ " " ++ target;  # "Hello World"
+```
+
+### String Indexing
+
+```python
+string text = "Hello";
+println(text[0]);  # Prints "H"
+println(text[4]);  # Prints "o"
+```
+
+### String Length
+
+```python
+string text = "Hello";
+println(len(text));  # Prints 5
+```
+
+### String Slicing
+
+```python
+string s = "hello world";
+string sliced = s[1:5];  # "ello"
+```
+
+### String Conversion
+
+```python
+int num = 42;
+string text = str(num);  # Converts int to string: "42"
+```
+
+## Dictionary Operations
+
+Support for dictionary data structures with string keys:
+
+```python
+# Dictionary creation
+dict person = {"name": "Alice", "age": 30, "city": "Wonderland"};
+
+# Accessing dictionary values
+string name = person{"name"};  # "Alice"
+int age = person{"age"};       # 30
+
+# Updating dictionary values
+person{"age"} = 31;
+person{"city"} = "New York";
+```
+
+## Control Flow
+
+### If-Else Statements
+
+```python
+int x = 10;
+if (x > 5) {
+    println("x is greater than 5");
+} else {
+    println("x is not greater than 5");
 }
-
-# Correct usage
-greet("Alice")              # Works
-
-# Type errors
-greet(123)                  # Error: Expected string, got int
 ```
 
-### Variable Declarations
-* Variables must be declared with types
-* Types are checked at assignment
+### While Loops
 
-Example:
 ```python
-int x = 5;                  # Works
-string msg = "Hello";       # Works
-int y = "test";            # Error: Type mismatch
-```
-
-## Error Handling
-
-### Type Errors
-* Mismatched types in operations
-* Invalid string concatenation
-* Function parameter type mismatches
-* Return type violations
-* Assignment type mismatches
-
-Example error messages:
-```python
-"Error: " ++ 404
-# Error: String concatenation requires string operands, got str and int
-
-fun process(x : int) : string {
-    return x;
+int i = 0;
+while (i < 5) {
+    println(i);
+    i = i + 1;
 }
-# Error: Type mismatch: expected string but got int
 ```
 
+### Break and Continue
 
-## Implementation Details
-
-### Environment
-
-### Environment Structure
-The environment is implemented as a list of tuples (variable name, value):
 ```python
-env = [
-    ("x", 5),
-    ("y", "hello"),
-    ("add", (param_name, param_type, body, return_type))
-]
-```
-
-### Scoping Rules
-1. Variable Lookup:
-```python
-int x = 5;
-{
-    int x = 10;            # Creates new scope
-    println(x);            # Prints 10
-}
-println(x);                # Prints 5
-```
-
-2. Function Environment:
-```python
-fun outer(x : int) : int {
-    fun inner(y : int) : int {
-        return x + y;      # Captures x from outer scope
+int i = 0;
+while (i < 10) {
+    i = i + 1;
+    if (i % 2 == 0) {
+        continue;  # Skip even numbers
     }
-    return inner(x);
-}
-```
-
-### Type Checking Implementation
-```python
-def check_type(value, expected_type):
-    if expected_type == "int":
-        if not isinstance(value, int):
-            raise TypeError(f"Expected int, got {type(value)}")
-    elif expected_type == "string":
-        if not isinstance(value, str):
-            raise TypeError(f"Expected string, got {type(value)}")
-    return value
-```
-
-### String Concatenation Rules
-```python
-def check_concat_types(left, right):
-    if not isinstance(left, str) or not isinstance(right, str):
-        raise TypeError(f"String concatenation requires string operands")
-    return left + right
-```
-
-### Type Checking Examples
-
-1. Function Type Checking:
-```python
-fun process(x : int) : string {
-    return str(x);         # OK: explicit conversion
-    return x;              # Error: expected string, got int
-}
-```
-
-2. Operation Type Checking:
-```python
-string s = "Hello";
-int n = 42;
-string good = s ++ " World";     # OK: string ++ string
-string bad = s ++ n;             # Error: can't concat string and int
-```
-
-3. Return Type Enforcement:
-```python
-fun calculate(x : int) : int {
-    if (x > 0) {
-        return x + 1;      # OK: returns int
-    } else {
-        return "zero";     # Error: expected int, got string
+    if (i > 7) {
+        break;     # Exit loop when i > 7
     }
+    println(i);    # Prints 1, 3, 5, 7
 }
 ```
 
-### Error Handling Examples
+## Optimizations
 
-1. Type Mismatch:
+### Function Inlining
+
+The compiler automatically inlines small, non-recursive functions to improve performance:
+
 ```python
-fun proc(x : string) : int {
-    return x;             # Error: Type mismatch: expected int but got string
-}
-```
-
-2. Invalid Operation:
-```python
-int x = "hello" + 5;     # Error: cannot add string and int
-```
-
-3. Missing Return:
-```python
-fun noreturn(x : int) : int {
-    int y = x + 1;       # Error: function must return a value
-}
-```
-
-### Implementation Details
-
-The interpreter uses pattern matching for AST evaluation:
-```python
-match tree:
-    case Number(v):
-        return int(v)
-    case BinOp("+", l, r):
-        return e(l, env) + e(r, env)
-    case Call(f, x):
-        param, param_type, body, return_type = lookup(env, f)
-        # Type checking and evaluation...
-```
-
-Environment lookup uses reverse list traversal for proper scoping:
-```python
-def lookup(env, v):
-    for u, uv in reversed(env):
-        if u == v:
-            return uv
-    raise ValueError(f"Variable {v} not found")
-```
-
-## Example Programs
-
-### String Manipulation
-```python
-fun makeTitle(text : string) : string {
-    return "*** " ++ text ++ " ***";
+fun triple(x: int): int {
+    return 3 * x;
 }
 
-fun error(code : int) : string {
-    return "Error " ++ str(code);  # Explicit conversion
-}
+# This will be optimized by inlining the triple function
+int result = triple(5);  # Becomes effectively: int result = 3 * 5;
 ```
 
-### Type-Safe Functions
+### Peephole Optimization
+
+The compiler performs constant folding and other peephole optimizations:
+
 ```python
-fun double(x : int) : int {
-    return x + x;
-}
-
-fun concat(a : string, b : string) : string {
-    return a ++ b;
-}
+int x = 5 + 3 * 2;  # Compiled as: int x = 11;
+bool check = 5 < 10 and 20 > 15;  # Compiled as: bool check = true;
 ```
 
-## Running Tests
+## Bytecode Compilation
 
-### All Tests
-From the main directory:
+Our language includes an efficient bytecode compiler and virtual machine for executing programs:
+
+* The bytecode compiler transforms the AST into a sequence of bytecode instructions
+* The bytecode VM interprets these instructions more efficiently than direct AST interpretation
+* Function inlining and constant folding optimizations are performed during bytecode generation
+* The bytecode format includes instruction opcodes, constants, and variable information
+
+### Example Bytecode Execution
+
+Project Euler solutions showcase the efficiency of our bytecode VM:
+
+```
+Compiling code...
+
+Bytecode Stats:
+Instructions: 21
+Constants: 6
+Variables: 3
+Max Stack Size: 4
+
+Executing bytecode...
+Sum of all multiples of 3 or 5 below 1000: 233168
+
+Expected output: Sum of all multiples of 3 or 5 below 1000: 233168
+Actual output: Sum of all multiples of 3 or 5 below 1000: 233168
+Output matches expected!
+```
+
+## Running the Language
+
+### Using the run.sh Script
+
+To execute programs written in our language, use the `run.sh` script:
+
 ```bash
-python3 -m tests.tests.py
+./run.sh your_program.txt
 ```
 
-### Individual Test Suites
+This script compiles your program and runs it, displaying the output in the terminal.
+
+### Command Line Options
+
 ```bash
-# Run unit tests only
-python3 -m tests.unit_tests.py
+# Run with bytecode compilation (default)
+./run.sh program.txt
 
-# Run Project Euler tests
-python3 -m tests.project_euler_tests.py
+# Run with interpreter only (no bytecode)
+./run.sh program.txt --interpret
 
-# Run error handling tests
-python3 -m tests.error_tests.py
+# Run with debug information
+./run.sh program.txt --debug
+
+# Run with optimization disabled
+./run.sh program.txt --no-optimize
 ```
 
 ## Project Structure
 ```
 /
 ├── main.py                 # Core language implementation
+├── run.sh                  # Script to run programs
 ├── tests/                  # Test suites
 │   ├── __init__.py        # Makes tests a package
 │   ├── test_framework.py  # Testing infrastructure
 │   ├── unit_tests.py      # Basic language feature tests
 │   ├── error_tests.py     # Error handling tests
+│   ├── bytecode_tests.py  # Tests for bytecode compilation
 │   ├── project_euler_tests.py  # Complex algorithmic tests
-│   └── tests.py   # Test runner
+│   └── tests.py           # Test runner
+├── examples/               # Example programs
+│   ├── basics.txt         # Basic language features
+│   ├── closures.txt       # Closure and function examples 
+│   └── structs.txt        # User-defined types examples
 ├── LICENSE                # MIT License
 └── README.md             # This documentation
 ```
 
-## Running the Interpreter
+## Examples from Project Euler
 
-```bash
-python3 tests.py          # Run all test cases
-```
+The language is powerful enough to solve complex algorithmic problems. Here are some examples:
 
-# Bytecode Compilation Implementation
-
-## Overview
-The language supports compilation to bytecode, providing a bridge between interpretation and native machine code. The bytecode implementation offers several advantages:
-
-- **Performance**: Faster execution than pure interpretation
-- **Portability**: Same bytecode runs on any platform with our VM
-- **Low-level Control**: Enables optimization techniques
-- **Debugging**: Clearer insight into code execution
-
-## Bytecode Architecture
-
-### Core Components
-The bytecode system consists of three main components:
-
-1. **BytecodeCompiler**: Transforms AST into bytecode instructions
-2. **BytecodeVM**: Executes the bytecode instructions
-3. **Instruction Set**: Stack-based operations for computation
-
-### Stack-Based Virtual Machine
-Our VM uses a stack-based architecture similar to Java's JVM and Python's CPython VM:
-
-- Operations pop operands from the stack and push results back
-- Variables are stored in a separate variables array
-- Constants are stored in a constant pool
-- Control flow managed through labels and jumps
-
-## Instruction Set
-
-### Stack Operations
-- `LOAD_CONST <idx>`: Push constant from pool onto stack
-- `LOAD_VAR <idx>`: Push variable value onto stack
-- `STORE_VAR <idx>`: Store value from stack into variable
-- `POP_TOP`: Discard the top value from stack
-
-### Arithmetic Operations
-- `BINARY_ADD`: Add top two stack values
-- `BINARY_SUB`: Subtract top value from second value
-- `BINARY_MUL`: Multiply top two stack values
-- `BINARY_DIV`: Integer division
-- `BINARY_MOD`: Modulo operation
-- `BINARY_POWER`: Power operation (x^y)
-
-### String Operations
-- `BINARY_CONCAT`: String concatenation
-- `STR_CONVERT`: Convert top of stack to string
-
-### Control Flow
-- `JUMP <label>`: Unconditional jump to label
-- `JUMP_IF_FALSE <label>`: Jump if top of stack is false
-- `LABEL <label>`: Define a jump target
-
-### Array Operations
-- `CREATE_ARRAY <size>`: Create array from elements on stack
-- `LOAD_ARRAY_ITEM`: Load item from array at index
-- `STORE_ARRAY_ITEM`: Store item to array at index
-- `GET_LENGTH`: Get length of array or string
-
-### Comparison Operations
-- `BINARY_LT`: Less than
-- `BINARY_GT`: Greater than
-- `BINARY_LE`: Less than or equal
-- `BINARY_GE`: Greater than or equal
-- `BINARY_EQ`: Equal
-- `BINARY_NE`: Not equal
-
-### Logical Operations
-- `BINARY_AND`: Logical AND
-- `BINARY_OR`: Logical OR
-
-### I/O Operations
-- `PRINT`: Print top of stack
-
-## Compilation Process
-
-### AST to Bytecode Translation
-Each AST node type is compiled to a sequence of bytecode instructions:
-
-1. **Literals**: Compiled to `LOAD_CONST`
-2. **Variables**: Compiled to `LOAD_VAR`/`STORE_VAR`
-3. **Operators**: Compiled to respective binary operations
-4. **Control Flow**: Compiled to conditional jumps and labels
-5. **Functions**: Compiled to parameter setup and jumps
-
-### Type Information
-Type information is preserved during compilation:
-
-- Function parameters and return types
-- Array element types
-- String operations
-
-### Memory Management
-The bytecode VM manages:
-
-- **Stack**: For temporary values during computation
-- **Variables**: For named storage
-- **Constants**: For literals (numbers, strings)
-- **Labels**: For control flow targets
-
-## Example: Bytecode Compilation
-
-### Source Code
+### Project Euler #1 - Multiples of 3 or 5
 ```python
-fun add(x : int, y : int) : int {
-    return x + y;
+int x = 1;
+int sum = 0;
+while(x < 1000) {
+    if (x % 3 == 0 or x % 5 == 0) {
+        sum = sum + x;
+    }
+    x = x + 1;
+}
+println("Sum of all multiples of 3 or 5 below 1000: " ++ str(sum));
+# Output: Sum of all multiples of 3 or 5 below 1000: 233168
+```
+
+### Project Euler #2 - Even Fibonacci Sum
+```python
+int sum = 0;
+int a = 1;
+int b = 2;
+while (b < 4000000) {
+    if (b % 2 == 0) {
+        sum = sum + b;
+    }
+    int temp = a + b;
+    a = b;
+    b = temp;
+}
+println("Sum of even-valued Fibonacci terms below 4 million: " ++ str(sum));
+# Output: Sum of even-valued Fibonacci terms below 4 million: 4613732
+```
+
+### Project Euler #4 - Largest Palindrome Product
+```python
+int maxpalindrome = 0;
+int i = 99;  
+
+while (i >= 10) {
+    int j = 99;  
+    while (j >= i) {  
+        int product = i * j;
+        
+        if (product <= maxpalindrome) {
+            break;
+        }
+        
+        int reversed = 0;
+        int temp = product;
+        while (temp > 0) {
+            reversed = reversed * 10 + temp % 10;
+            temp = temp / 10;
+        }
+        
+        if (product == reversed and product > maxpalindrome) {
+            maxpalindrome = product;
+        }
+        j = j - 1;
+    }
+    i = i - 1;
 }
 
-fun main() : int {
-    int a = 10;
-    int b = 20;
-    return add(a, b);
-}
+println("Largest palindrome made from the product of two 2-digit numbers: " ++ str(maxpalindrome));
+# Output: Largest palindrome made from the product of two 2-digit numbers: 9009
 ```
-
-### Bytecode
-```
-LOAD_CONST 10
-STORE_VAR 0
-LOAD_CONST 20
-STORE_VAR 1
-LOAD_VAR 0
-LOAD_VAR 1
-CALL add
-RETURN
-```
-
-### Execution
-The bytecode is executed by the VM, which manages the stack, variables, and control flow according to the instructions.
