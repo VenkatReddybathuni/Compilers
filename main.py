@@ -1568,6 +1568,12 @@ class BytecodeCompiler:
         # Second pass: compile with knowledge of globals
         self._compile_node(ast)
         
+        # Third pass: function inlining
+        self._inline_functions()
+        
+        # Fourth pass: peephole optimization
+        self._optimize_peephole()
+        
         # Store the variables mapping for the VM to use
         BytecodeCompiler.last_variables = self.variables
         
@@ -1855,6 +1861,286 @@ class BytecodeCompiler:
         
         # Return from function
         self.emit("RETURN_VALUE")
+
+    def _optimize_peephole(self):
+        """Apply peephole optimizations to the instruction list."""
+        optimized_instructions = []
+        i = 0
+        while i < len(self.instructions):
+            instruction = self.instructions[i]
+            optimized = False
+
+            # --- Constant Folding Example ---
+            # Pattern: LOAD_CONST c1, LOAD_CONST c2, BINARY_OP
+            if i + 2 < len(self.instructions):
+                instr1 = self.instructions[i]
+                instr2 = self.instructions[i+1]
+                instr3 = self.instructions[i+2]
+
+                if (instr1.opcode == "LOAD_CONST" and
+                    instr2.opcode == "LOAD_CONST" and
+                    instr3.opcode in ["BINARY_ADD", "BINARY_SUB", "BINARY_MUL", 
+                                       "BINARY_DIV", "BINARY_MOD", "BINARY_POWER",
+                                       "BINARY_LT", "BINARY_GT", "BINARY_LE", 
+                                       "BINARY_GE", "BINARY_EQ", "BINARY_NE"]):
+
+                    const1_idx = instr1.args[0]
+                    const2_idx = instr2.args[0]
+                    val1 = self.constants[const1_idx]
+                    val2 = self.constants[const2_idx]
+
+                    # Only fold if both are integers for arithmetic/comparison
+                    # Add checks for other types (e.g., strings for CONCAT) if needed
+                    if isinstance(val1, int) and isinstance(val2, int):
+                        result = None
+                        try:
+                            if instr3.opcode == "BINARY_ADD": result = val1 + val2
+                            elif instr3.opcode == "BINARY_SUB": result = val1 - val2
+                            elif instr3.opcode == "BINARY_MUL": result = val1 * val2
+                            elif instr3.opcode == "BINARY_DIV": result = val1 // val2 # Assuming integer division
+                            elif instr3.opcode == "BINARY_MOD": result = val1 % val2
+                            elif instr3.opcode == "BINARY_POWER": result = val1 ** val2
+                            elif instr3.opcode == "BINARY_LT": result = val1 < val2
+                            elif instr3.opcode == "BINARY_GT": result = val1 > val2
+                            elif instr3.opcode == "BINARY_LE": result = val1 <= val2
+                            elif instr3.opcode == "BINARY_GE": result = val1 >= val2
+                            elif instr3.opcode == "BINARY_EQ": result = val1 == val2
+                            elif instr3.opcode == "BINARY_NE": result = val1 != val2
+                        except Exception:
+                            # Avoid folding if operation fails (e.g., division by zero)
+                            result = None 
+
+                        if result is not None:
+                            new_const_idx = self.add_constant(result)
+                            optimized_instructions.append(BytecodeInstruction("LOAD_CONST", [new_const_idx]))
+                            i += 3 # Skip the original 3 instructions
+                            optimized = True
+            
+            # --- Add more optimization patterns here ---
+            # Example: Redundant Load/Store (LOAD_VAR x, STORE_VAR x) -> remove both
+            # if i + 1 < len(self.instructions):
+            #     instr1 = self.instructions[i]
+            #     instr2 = self.instructions[i+1]
+            #     if (instr1.opcode == "LOAD_VAR" and instr2.opcode == "STORE_VAR" and
+            #         instr1.args[0] == instr2.args[0]): # Same variable index
+            #         i += 2 # Skip both instructions
+            #         optimized = True
+
+            # If no optimization applied, copy the original instruction
+            if not optimized:
+                optimized_instructions.append(instruction)
+                i += 1
+
+        self.instructions = optimized_instructions
+        # Note: If optimizations add/remove instructions, label positions might change.
+        # The current VM resolves labels at runtime (_find_label), so this should be okay
+        # as long as LABEL instructions themselves are preserved.
+
+    def _inline_functions(self):
+        """Inline small, non-recursive function calls where beneficial"""
+        # Build a map of function definitions: label -> (start_idx, end_idx, param_count)
+        function_map = {}
+        
+        # First pass: identify function definitions and their boundaries
+        i = 0
+        while i < len(self.instructions):
+            instr = self.instructions[i]
+            
+            # Look for LOAD_CONST (function metadata) followed by MAKE_FUNCTION
+            if (instr.opcode == "LOAD_CONST" and i + 1 < len(self.instructions) and
+                self.instructions[i+1].opcode == "MAKE_FUNCTION"):
+                
+                # Get function metadata from constants pool
+                const_idx = instr.args[0]
+                func_meta = self.constants[const_idx]
+                
+                if isinstance(func_meta, tuple) and len(func_meta) >= 3:
+                    func_label = func_meta[0]
+                    params = func_meta[1]
+                    
+                    # Find function body (between LABEL and either RETURN_VALUE or end of instructions)
+                    start_idx = None
+                    for j in range(i+2, len(self.instructions)):
+                        if (self.instructions[j].opcode == "LABEL" and 
+                            self.instructions[j].args[0] == func_label):
+                            start_idx = j + 1  # Start after the label
+                            break
+                    
+                    if start_idx:
+                        # Find the end (first RETURN_VALUE)
+                        end_idx = None
+                        for j in range(start_idx, len(self.instructions)):
+                            if self.instructions[j].opcode == "RETURN_VALUE":
+                                end_idx = j
+                                break
+                        
+                        if end_idx:
+                            # Store function information
+                            function_map[func_label] = {
+                                'start_idx': start_idx,
+                                'end_idx': end_idx,
+                                'param_count': len(params),
+                                'body_size': end_idx - start_idx,
+                                'called_count': 0,  # Will be incremented during analysis
+                                'contains_recursion': False  # Will be set during analysis
+                            }
+            
+            i += 1
+        
+        # Second pass: analyze function calls to identify candidates for inlining
+        # and check for recursion
+        i = 0
+        while i < len(self.instructions):
+            instr = self.instructions[i]
+            
+            # Look for LOAD_VAR/LOAD_GLOBAL followed by potential arguments and CALL_FUNCTION
+            if instr.opcode in ["LOAD_VAR", "LOAD_GLOBAL"]:
+                # Scan ahead to find the CALL_FUNCTION instruction
+                j = i + 1
+                while j < len(self.instructions) and self.instructions[j].opcode not in ["CALL_FUNCTION"]:
+                    j += 1
+                
+                if j < len(self.instructions) and self.instructions[j].opcode == "CALL_FUNCTION":
+                    # This is a function call
+                    call_instr = self.instructions[j]
+                    arg_count = call_instr.args[0]
+                    
+                    # Get function name
+                    var_idx = instr.args[0]
+                    var_name = self._get_var_name(var_idx)
+                    
+                    # If we have a function definition with this name in our constants
+                    for func_label, func_info in function_map.items():
+                        # For each LOAD_CONST instruction that loads a function object
+                        for k in range(len(self.instructions)):
+                            if (self.instructions[k].opcode == "LOAD_CONST" and 
+                                k + 2 < len(self.instructions) and 
+                                self.instructions[k+1].opcode == "MAKE_FUNCTION" and
+                                self.instructions[k+2].opcode in ["STORE_VAR", "STORE_GLOBAL"]):
+                                
+                                const_idx = self.instructions[k].args[0]
+                                store_idx = self.instructions[k+2].args[0]
+                                store_name = self._get_var_name(store_idx)
+                                
+                                if store_name == var_name:
+                                    func_meta = self.constants[const_idx]
+                                    if isinstance(func_meta, tuple) and len(func_meta) >= 3 and func_meta[0] == func_label:
+                                        # We found a call to this function
+                                        func_info['called_count'] += 1
+                                        
+                                        # Check for recursive calls within this function
+                                        for l in range(func_info['start_idx'], func_info['end_idx']):
+                                            rec_instr = self.instructions[l]
+                                            if rec_instr.opcode in ["LOAD_VAR", "LOAD_GLOBAL"]:
+                                                rec_var_idx = rec_instr.args[0]
+                                                rec_var_name = self._get_var_name(rec_var_idx)
+                                                if rec_var_name == var_name:
+                                                    # This is a recursive function
+                                                    func_info['contains_recursion'] = True
+            
+            i += 1
+        
+        # Third pass: inline small, non-recursive functions that are called only a few times
+        inlinings_done = 0
+        i = 0
+        while i < len(self.instructions):
+            instr = self.instructions[i]
+            
+            # Look for LOAD_VAR/LOAD_GLOBAL followed by potential arguments and CALL_FUNCTION
+            if instr.opcode in ["LOAD_VAR", "LOAD_GLOBAL"]:
+                # Scan ahead to find the CALL_FUNCTION instruction
+                j = i + 1
+                while j < len(self.instructions) and self.instructions[j].opcode not in ["CALL_FUNCTION"]:
+                    j += 1
+                
+                if j < len(self.instructions) and self.instructions[j].opcode == "CALL_FUNCTION":
+                    # This is a function call
+                    call_instr = self.instructions[j]
+                    arg_count = call_instr.args[0]
+                    
+                    # Get function name
+                    var_idx = instr.args[0]
+                    var_name = self._get_var_name(var_idx)
+                    
+                    # Find the function definition in our constants
+                    func_label = None
+                    func_info = None
+                    
+                    for k in range(len(self.instructions)):
+                        if (self.instructions[k].opcode == "LOAD_CONST" and 
+                            k + 2 < len(self.instructions) and 
+                            self.instructions[k+1].opcode == "MAKE_FUNCTION" and
+                            self.instructions[k+2].opcode in ["STORE_VAR", "STORE_GLOBAL"]):
+                            
+                            const_idx = self.instructions[k].args[0]
+                            store_idx = self.instructions[k+2].args[0]
+                            store_name = self._get_var_name(store_idx)
+                            
+                            if store_name == var_name:
+                                func_meta = self.constants[const_idx]
+                                if isinstance(func_meta, tuple) and len(func_meta) >= 3:
+                                    candidate_label = func_meta[0]
+                                    if candidate_label in function_map:
+                                        func_label = candidate_label
+                                        func_info = function_map[func_label]
+                    
+                    # If we found the function and it's a good candidate for inlining
+                    if (func_label and func_info and 
+                        not func_info['contains_recursion'] and 
+                        func_info['body_size'] <= 20 and  # Small function
+                        func_info['called_count'] <= 3 and  # Not called many times
+                        arg_count == func_info['param_count']):  # Argument count matches
+                        
+                        # This function can be inlined
+                        inline_start = i
+                        inline_end = j + 1
+                        
+                        # Calculate the point where arguments start on the stack
+                        # We need to adjust if there are instructions between LOAD_VAR and CALL_FUNCTION
+                        arg_start = i + 1
+                        
+                        # Skip all the argument loading instructions
+                        new_instructions = self.instructions[:inline_start]
+                        
+                        # Copy the function body instructions
+                        for k in range(func_info['start_idx'], func_info['end_idx']):
+                            body_instr = self.instructions[k]
+                            
+                            # Skip parameter loading instructions
+                            if k < func_info['start_idx'] + func_info['param_count']:
+                                continue
+                                
+                            # Convert RETURN_VALUE to just leaving the result on the stack
+                            if body_instr.opcode == "RETURN_VALUE":
+                                # No need to add anything here - value is already on stack
+                                pass
+                            else:
+                                # Add the instruction from function body
+                                new_instructions.append(body_instr)
+                        
+                        # Add instructions after the function call
+                        new_instructions.extend(self.instructions[inline_end:])
+                        
+                        # Update instructions
+                        self.instructions = new_instructions
+                        inlinings_done += 1
+                        
+                        # Start scanning from the beginning of the inlined code
+                        i = inline_start - 1  # Will be incremented to inline_start in next iteration
+            
+            i += 1
+        
+        if inlinings_done > 0:
+            print(f"Function inlining optimization: {inlinings_done} function calls inlined")
+            # Re-optimize after inlining
+            self._optimize_peephole()
+
+    def _get_var_name(self, var_idx):
+        """Get variable name from index (reverse lookup in variables map)"""
+        for name, idx in self.variables.items():
+            if idx == var_idx:
+                return name
+        return f"var{var_idx}"  # Fallback if name not found
 
 # Define a BytecodeVM class to execute compiled bytecode
 class BytecodeVM:

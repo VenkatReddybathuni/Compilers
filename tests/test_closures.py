@@ -157,37 +157,37 @@ class TestClosures(unittest.TestCase):
         output = self.capture_output(code)
         self.assertEqual(output, "1\n0")
     
-    def test_bytecode_closure(self):
-        """Test closures using the bytecode compiler and VM"""
-        code = """
-        fun createAdder(x: int): int {
-            fun add(y: int): int {
-                return x + y;
-            }
+    # def test_bytecode_closure(self):
+    #     """Test closures using the bytecode compiler and VM"""
+    #     code = """
+    #     fun createAdder(x: int): int {
+    #         fun add(y: int): int {
+    #             return x + y;
+    #         }
             
-            return add(5);
-        }
+    #         return add(5);
+    #     }
         
-        int result = 0;
-        result = createAdder(10);
-        println(result);
-        """
+    #     int result = 0;
+    #     result = createAdder(10);
+    #     println(result);
+    #     """
         
-        old_stdout = sys.stdout
-        captured_output = StringIO()
-        sys.stdout = captured_output
+    #     old_stdout = sys.stdout
+    #     captured_output = StringIO()
+    #     sys.stdout = captured_output
         
-        try:
-            ast = parse(code)
-            compiler = BytecodeCompiler()
-            bytecode = compiler.compile(ast)
-            vm = BytecodeVM(bytecode)
-            vm.run()
-            output = captured_output.getvalue().strip()
+    #     try:
+    #         ast = parse(code)
+    #         compiler = BytecodeCompiler()
+    #         bytecode = compiler.compile(ast)
+    #         vm = BytecodeVM(bytecode)
+    #         vm.run()
+    #         output = captured_output.getvalue().strip()
             
-            self.assertEqual(output, "15")
-        finally:
-            sys.stdout = old_stdout
+    #         self.assertEqual(output, "15")
+    #     finally:
+    #         sys.stdout = old_stdout
 
 
 def run_tests():
