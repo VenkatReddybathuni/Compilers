@@ -71,8 +71,12 @@ def run_test_case(test_case: TestCase) -> tuple[bool, str]:
         return True, "Test passed successfully"
 
     except Exception as err:
-        # Any error results in a failed test with the error message
-        return False, f"Error: {type(err).__name__}: {str(err)}"
+        # Check if the error type matches the expected error type
+        if test_case.expected_error is not None and isinstance(err, test_case.expected_error):
+            return True, f"Test passed with expected error: {err}"
+        
+        # If we reach here, it means the test failed
+        return False, f"Test failed with unexpected error: {err}"
 
 def run_test_suite(test_cases: list[TestCase]) -> TestResult:
     """Run a suite of test cases and return results"""

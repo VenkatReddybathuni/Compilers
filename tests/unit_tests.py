@@ -1,4 +1,4 @@
-from test_framework import TestCase, run_test_suite
+from tests.test_framework import TestCase, run_test_suite
 from main import TypeError, ParseError
 
 def run_tests():
@@ -442,6 +442,61 @@ def run_tests():
             """,
             expected_output="15"
         ),
+        
+        # User-defined type tests
+        TestCase(
+            name="Simple User-Defined Type",
+            code="""
+            type Person { "name": string, "age": int };
+            Person p = Person { "name": "Alice", "age": 30 };
+            println(p{"name"});
+            println(p{"age"});
+            """,
+            expected_output="Alice\n30"
+        ),
+        TestCase(
+            name="User-Defined Type with Methods",
+            code="""
+            type Rectangle { "width": int, "height": int };
+            
+            fun area(rect: Rectangle) : int {
+                return rect{"width"} * rect{"height"};
+            }
+            
+            Rectangle r = Rectangle { "width": 5, "height": 10 };
+            println("Area: " ++ str(area(r)));
+            """,
+            expected_output="Area: 50"
+        ),
+        TestCase(
+            name="User-Defined Type Field Update",
+            code="""
+            type Counter { "value": int };
+            
+            Counter c = Counter { "value": 0 };
+            c{"value"} = c{"value"} + 1;
+            println(c{"value"});
+            c{"value"} = c{"value"} + 10;
+            println(c{"value"});
+            """,
+            expected_output="1\n11"
+        ),
+        TestCase(
+            name="Multiple User-Defined Types",
+            code="""
+            type Point { "x": int, "y": int };
+            type Circle { "center": Point, "radius": int };
+            
+            Point origin = Point { "x": 0, "y": 0 };
+            Circle c = Circle { "center": Point { "x": 5, "y": 10 }, "radius": 15 };
+            
+            println(c{"center"}{"x"});
+            println(c{"center"}{"y"});
+            println(c{"radius"});
+            """,
+            expected_output="5\n10\n15"
+        ),
+        
     ]
 
     # Run all tests and print summary
@@ -449,4 +504,4 @@ def run_tests():
     results.print_summary()
 
 if __name__ == "__main__":
-    run_tests()
+    run_tests()            

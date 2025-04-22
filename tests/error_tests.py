@@ -103,6 +103,52 @@ def run_tests():
             """,
             expected_error=TypeError
         ),
+        
+        # User-defined Type Error Tests
+        TestCase(
+            name="Unknown Type",
+            code="""
+            Person p = Person { "name": "Alice", "age": 30 };
+            println(p);
+            """,
+            expected_error=TypeError
+        ),
+        TestCase(
+            name="Unknown Field Access",
+            code="""
+            type Person { "name": string, "age": int };
+            Person p = Person { "name": "Alice", "age": 30 };
+            println(p{"unknown_field"});
+            """,
+            expected_error=KeyError
+        ),
+        TestCase(
+            name="Type Mismatch in Field",
+            code="""
+            type Person { "name": string, "age": int };
+            Person p = Person { "name": "Alice", "age": "thirty" };
+            println(p{"age"});
+            """,
+            expected_error=TypeError
+        ),
+        TestCase(
+            name="Missing Required Field",
+            code="""
+            type Person { "name": string, "age": int };
+            Person p = Person { "name": "Alice" };
+            println(p{"name"});
+            """,
+            expected_error=TypeError
+        ),
+        TestCase(
+            name="Extra Field in Type Instantiation",
+            code="""
+            type Person { "name": string, "age": int };
+            Person p = Person { "name": "Alice", "age": 30, "extra": "field" };
+            println(p{"name"});
+            """,
+            expected_error=TypeError
+        ),
     ]
     results = run_test_suite(test_cases)
     results.print_summary()

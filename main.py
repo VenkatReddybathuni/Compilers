@@ -116,6 +116,17 @@ class DictAssign(AST):
     dict: AST
     key: AST
     value: AST
+
+@dataclass
+class TypeDef(AST):
+    name: str
+    fields: dict  # Maps field name to type name
+
+@dataclass
+class TypeInstantiation(AST):
+    type_name: str
+    fields: Dict
+
 class Token:
     pass
 
@@ -143,6 +154,10 @@ class StringToken(Token):
 class TypeToken(Token):
     t: str
     is_array: bool = False  # Add array type flag
+
+@dataclass
+class TypeDefToken(Token):
+    name: str
 
 @dataclass
 class ArrayToken(Token):
@@ -182,6 +197,9 @@ def convert_to_string(value, context=""):
         return str(value)
     raise TypeError(f"{context}Cannot convert {type(value).__name__} to string")
 
+# Dictionary to store user-defined types
+user_defined_types = {}
+
 def check_type(value, expected_type):
     if '[' in expected_type:  # Handle array types
         base_type = expected_type.split('[')[0].strip()
@@ -193,6 +211,13 @@ def check_type(value, expected_type):
         elif base_type == "string":
             if not all(isinstance(x, str) for x in value):
                 raise TypeError(f"Array elements must be {base_type}")
+        return value
+    
+    # Handle user-defined types
+    if expected_type in user_defined_types:
+        if not isinstance(value, dict):
+            raise TypeError(f"Type mismatch: expected {expected_type} but got {type(value).__name__}")
+        # Additional type checking could be done here
         return value
     
     if expected_type == "any":  # Special case for len() function
@@ -226,7 +251,7 @@ def update_env(env, name, value):
             env[i] = (name, value)
             return
     env.append((name, value))
-def e(tree: AST, env=None) -> int | bool | str | list:
+def e(tree: AST, env=None) -> int | bool | str | list | dict:
     if env is None:
         env = []  # Empty list for environment
 
@@ -431,6 +456,45 @@ def e(tree: AST, env=None) -> int | bool | str | list:
             #     raise TypeError(f"Cannot assign key in non-dict type {type(d).__name__}")
             d[k] = v
             return v
+        case TypeDef(name, fields):
+            # Register the type definition
+            user_defined_types[name] = fields
+            return None
+            
+        case TypeInstantiation(type_name, fields):
+            # Check if the type exists
+            if type_name not in user_defined_types:
+                raise TypeError(f"Unknown type: {type_name}")
+            
+            type_def = user_defined_types[type_name]
+            # Create an empty dict for the instance
+            instance = {}
+            
+            # Evaluate fields Dict and extract the pairs
+            fields_dict = e(fields, env)
+            
+            # Check for missing required fields
+            for field_name in type_def:
+                if field_name not in fields_dict:
+                    raise TypeError(f"Missing required field '{field_name}' for type {type_name}")
+                    
+            # Check for extra fields
+            for field_name in fields_dict:
+                if field_name not in type_def:
+                    raise TypeError(f"Unknown field '{field_name}' for type {type_name}")
+            
+            # Type check and populate the instance
+            for field_name, field_value in fields_dict.items():
+                expected_type = type_def[field_name]
+                # Type check the field value
+                try:
+                    typed_value = check_type(field_value, expected_type)
+                    instance[field_name] = typed_value
+                except TypeError as te:
+                    raise TypeError(f"Field '{field_name}' type mismatch: {str(te)}")
+                
+            # Return the instance as a dict
+            return instance
 
 def lex(s: str) -> Iterator[Token]:
     i = 0
@@ -444,7 +508,7 @@ def lex(s: str) -> Iterator[Token]:
         if s[i].isalpha():
             t = s[i]
             i = i + 1
-            while i < len(s) and (s[i].isalpha() or s[i].isdigit()):  # Allow digits in identifiers
+            while i < len(s) and (s[i].isalpha() or s[i].isdigit() or s[i] == '_'):  # Allow digits and underscores in identifiers 
                 t = t + s[i]
                 i = i + 1
             # print(t)
@@ -454,7 +518,7 @@ def lex(s: str) -> Iterator[Token]:
                 is_array = True
                 i += 2
                 
-            if t in {"and", "or", "if", "else", "fun", "return", "println", "str", "while", "continue", "break", "dict"}:  # Added while, continue, break
+            if t in {"and", "or", "if", "else", "fun", "return", "println", "str", "while", "continue", "break", "dict", "type"}:  # Added "type"
                 yield KeywordToken(t)
             elif t in {"int", "float", "string", "void", "bool"}:  # Types are now handled separately
                 yield TypeToken(t, is_array)
@@ -491,7 +555,6 @@ def lex(s: str) -> Iterator[Token]:
                 case _:
                     raise ParseError(f"Unexpected character: {t}")
 
-        
 
 class ParseError(Exception):
     pass
@@ -499,15 +562,14 @@ class ParseError(Exception):
 def parse(s: str) -> AST:
     from more_itertools import peekable
     tokens = list(lex(s))
-    # print(tokens)
     t = peekable(tokens)
-    # print(lex(s))
+    
     def expect(what: Token):
         if t.peek(None) == what:
             next(t)
             return
-        raise ParseError(f"Expected {what}")  
-
+        raise ParseError(f"Expected {what} but got {t.peek(None)}")
+    
     def parse_statements():
         statements = []
         while t.peek(None) is not None:
@@ -515,7 +577,7 @@ def parse(s: str) -> AST:
                 break
 
             stmt = parse_stmt()
-            # print(stmt)
+            #print(stmt)
             statements.append(stmt)
 
             # Handle semicolons more carefully
@@ -533,6 +595,56 @@ def parse(s: str) -> AST:
     def parse_stmt():
         # print(f"parse_stmt: {t.peek(None)}")  # Debugging statement
         match t.peek(None):
+            # ...existing code...
+            
+            case VarToken(var) if var in user_defined_types:
+                # This is a type declaration using a user-defined type
+                type_name = next(t).v  # consume the type name (e.g. "Person")
+                
+                if not isinstance(t.peek(None), VarToken):
+                    raise ParseError(f"Expected variable name after type {type_name}")
+                
+                var_name = next(t).v  # consume the variable name (e.g. "p")
+                
+                expect(OperatorToken("="))
+                
+                # Now we expect the type name again for instantiation
+                if not isinstance(t.peek(None), VarToken) or t.peek().v != type_name:
+                    raise ParseError(f"Expected type {type_name} for instantiation")
+                
+                next(t)  # consume the type name again
+                
+                # Parse instantiation body { "field1": value1, ... }
+                expect(OperatorToken("{"))
+                pairs = []
+                
+                while t.peek(None) != OperatorToken("}"):
+                    # Field key must be a string literal
+                    if not isinstance(t.peek(None), StringToken):
+                        raise ParseError("Expected field name as string literal")
+                    key = String(next(t).v)
+                    
+                    expect(OperatorToken(":"))
+                    value = parse_expr()
+                    pairs.append((key, value))
+                    
+                    if t.peek(None) == OperatorToken(","):
+                        next(t)
+                        # Check if there's another field after comma
+                        if t.peek(None) == OperatorToken("}"):
+                            break
+                    # No need to check for closing brace here - let the loop condition handle it
+                
+                expect(OperatorToken("}"))
+                
+                # Create the type instantiation
+                type_inst = TypeInstantiation(type_name, Dict(pairs))
+                
+                # Assign to variable
+                expect(OperatorToken(";"))
+                next_stmt = parse_statements() if t.peek(None) is not None else None
+                return Let(var_name, type_inst, next_stmt if next_stmt else Sequence([]), type_name)
+
             case TypeToken(typ, is_array):
                 next(t)
                 if not isinstance(t.peek(None), VarToken):
@@ -582,18 +694,27 @@ def parse(s: str) -> AST:
 
                 # Parse parameter type
                 expect(OperatorToken(":"))
-                if not isinstance(t.peek(None), TypeToken):
+                
+                # Allow both built-in types (TypeToken) and user-defined types (VarToken)
+                if isinstance(t.peek(None), TypeToken):
+                    param_token = next(t)
+                    param_type = param_token.t + "[]" if param_token.is_array else param_token.t
+                elif isinstance(t.peek(None), VarToken):
+                    # This is a user-defined type
+                    param_type = next(t).v
+                else:
                     raise ParseError("Expected parameter type")
-                param_token = next(t)
-                param_type = param_token.t + "[]" if param_token.is_array else param_token.t
 
                 expect(OperatorToken(")"))
 
-                # Handle return type
+                # Handle return type - also allow user-defined types
                 expect(OperatorToken(":"))
-                if not isinstance(t.peek(None), TypeToken):
+                if isinstance(t.peek(None), TypeToken):
+                    return_type = next(t).t
+                elif isinstance(t.peek(None), VarToken):
+                    return_type = next(t).v
+                else:
                     raise ParseError("Expected return type")
-                return_type = next(t).t
 
                 expect(OperatorToken("{"))
                 body = parse_statements()
@@ -672,8 +793,62 @@ def parse(s: str) -> AST:
                 expect(OperatorToken(")"))
                 expect(OperatorToken(";"))  # Always require semicolon
                 return PrintLn(expr)
+            case KeywordToken("type"):
+                next(t)  # consume 'type'
+                if not isinstance(t.peek(None), VarToken):
+                    raise ParseError("Expected type name")
+                type_name = next(t).v
+                
+                # Register type name early so it can be used in field types
+                if type_name not in user_defined_types:
+                    user_defined_types[type_name] = {}
+                
+                # Expect opening brace
+                expect(OperatorToken("{"))
+                
+                # Parse field definitions
+                fields = {}
+                while t.peek(None) != OperatorToken("}"):
+                    # Parse field name (as string literal)
+                    if not isinstance(t.peek(None), StringToken):
+                        raise ParseError("Expected field name as string literal")
+                    field_name = next(t).v
+                    
+                    # Expect colon
+                    expect(OperatorToken(":"))
+                    
+                    # Parse field type - allow TypeToken or VarToken (for user-defined types)
+                    if isinstance(t.peek(None), TypeToken):
+                        field_type_token = next(t)
+                        field_type = field_type_token.t + "[]" if field_type_token.is_array else field_type_token.t
+                    elif isinstance(t.peek(None), VarToken):
+                        # This is a user-defined type
+                        field_type = next(t).v
+                    else:
+                        raise ParseError("Expected field type")
+                    
+                    # Add the field to our type definition
+                    fields[field_name] = field_type
+                    
+                    # Parse comma or closing brace
+                    if t.peek(None) == OperatorToken(","):
+                        next(t)  # consume comma
+                    # Don't check for closing brace here - let the while loop condition handle it
+                
+                # Replace the early registration with complete field set
+                user_defined_types[type_name] = fields
+                
+                # Consume closing brace
+                expect(OperatorToken("}"))
+                expect(OperatorToken(";"))
+                
+                return TypeDef(type_name, fields)
+            
+            # Remove the old case for type instantiation as it will now be handled at the top
+            
             case _:
                 return parse_expr()
+       
 
     def parse_expr():
         expr = parse_assign()
@@ -690,7 +865,33 @@ def parse(s: str) -> AST:
                 next(t)
                 expr = parse_expr()
                 return Assign(var.v, expr)
-            t.prepend(var)  
+            # Look for type instantiation as an expression
+            elif var.v in user_defined_types and isinstance(t.peek(None), OperatorToken) and t.peek().o == '{':
+                type_name = var.v
+                # Parse instantiation body
+                next(t)  # consume '{'
+                pairs = []
+                
+                while t.peek(None) != OperatorToken("}"):
+                    # Field key must be a string literal
+                    if not isinstance(t.peek(None), StringToken):
+                        raise ParseError("Expected field name as string literal")
+                    key = String(next(t).v)
+                    
+                    expect(OperatorToken(":"))
+                    value = parse_expr()  # This allows for recursive type instantiation
+                    pairs.append((key, value))
+                    
+                    if t.peek(None) == OperatorToken(","):
+                        next(t)
+                        # Check if there's another field after comma
+                        if t.peek(None) == OperatorToken("}"):
+                            break
+                
+                expect(OperatorToken("}"))
+                return TypeInstantiation(type_name, Dict(pairs))
+            else:
+                t.prepend(var)
         return parse_logical()
 
     def parse_logical():
@@ -792,35 +993,79 @@ def parse(s: str) -> AST:
                 return Array([Number(e.v) for e in elements])
             case VarToken(name):
                 next(t)
-                if isinstance(t.peek(None), OperatorToken) and t.peek().o == '[':
-                    next(t)  # consume [
-                    index = parse_expr()
-                    if isinstance(t.peek(None), OperatorToken) and t.peek().o == ':':
-                        next(t)  # consume :
-                        end = parse_expr()
-                        expect(OperatorToken(']'))
-                        return Slice(Var(name), index, end)
-                    expect(OperatorToken(']'))
-                    if isinstance(t.peek(None), OperatorToken) and t.peek().o == '=':
-                        next(t)  # consume =
-                        value = parse_expr()
-                        return ArrayAssign(Var(name), index, value)
-                    return ArrayAccess(Var(name), index)
-                elif isinstance(t.peek(None), OperatorToken) and t.peek().o == '(':
-                    next(t)
-                    arg = parse_expr()
-                    expect(OperatorToken(")"))
-                    return Call(name, arg)
-                elif isinstance(t.peek(None), OperatorToken) and t.peek().o == '{':
-                    next(t)  # consume {
-                    key = parse_expr()
-                    expect(OperatorToken('}'))
-                    if isinstance(t.peek(None), OperatorToken) and t.peek().o == '=':
-                        next(t)  # consume =
-                        value = parse_expr()
-                        return DictAssign(Var(name), key, value)
-                    return DictAccess(Var(name), key)
-                return Var(name)
+                
+                # First create the base variable expression
+                expr = Var(name)
+                
+                # Now handle any possible chained operations like array access, function calls, 
+                # or dictionary/field access
+                while True:
+                    if isinstance(t.peek(None), OperatorToken):
+                        if t.peek().o == '[':  # Array access
+                            next(t)  # consume [
+                            index = parse_expr()
+                            if isinstance(t.peek(None), OperatorToken) and t.peek().o == ':':
+                                next(t)  # consume :
+                                end = parse_expr()
+                                expect(OperatorToken(']'))
+                                expr = Slice(expr, index, end)
+                            else:
+                                expect(OperatorToken(']'))
+                                if isinstance(t.peek(None), OperatorToken) and t.peek().o == '=':
+                                    next(t)  # consume =
+                                    value = parse_expr()
+                                    expr = ArrayAssign(expr, index, value)
+                                else:
+                                    expr = ArrayAccess(expr, index)
+                        elif t.peek().o == '(':  # Function call
+                            next(t)
+                            arg = parse_expr()
+                            expect(OperatorToken(")"))
+                            expr = Call(name, arg)
+                            break  # Function calls can't be chained in our language
+                        elif t.peek().o == '{':  # Dictionary/field access
+                            next(t)  # consume {
+                            key = parse_expr()
+                            expect(OperatorToken('}'))
+                            if isinstance(t.peek(None), OperatorToken) and t.peek().o == '=':
+                                next(t)  # consume =
+                                value = parse_expr()
+                                expr = DictAssign(expr, key, value)
+                                break  # Assignment ends the chain
+                            else:
+                                expr = DictAccess(expr, key)
+                        else:
+                            break  # No more chained operations
+                    else:
+                        break  # Not an operator, end of chain
+                
+                # Handle type instantiation (separate from chained access)
+                if name in user_defined_types and expr == Var(name) and isinstance(t.peek(None), OperatorToken) and t.peek().o == '{':
+                    # This is an inline type instantiation
+                    type_name = name
+                    expect(OperatorToken("{"))
+                    pairs = []
+                    
+                    while t.peek(None) != OperatorToken("}"):
+                        # Field key must be a string literal
+                        if not isinstance(t.peek(None), StringToken):
+                            raise ParseError("Expected field name as string literal")
+                        key = String(next(t).v)
+                        
+                        expect(OperatorToken(":"))
+                        value = parse_expr()  # This allows nested type instantiations
+                        pairs.append((key, value))
+                        
+                        if t.peek(None) == OperatorToken(","):
+                            next(t)
+                            # Check if there's another field after comma
+                            if t.peek(None) == OperatorToken("}"):
+                                break
+                    
+                    expect(OperatorToken("}"))
+                    return TypeInstantiation(type_name, Dict(pairs))
+                
+                return expr
             case OperatorToken('['):
                 next(t)  # consume opening bracket
                 elements = []
@@ -1027,7 +1272,8 @@ class BytecodeCompiler:
                     self._compile_node(stmt)
                     # Add POP_TOP if the statement produces a value that's not used
                     # and it's not the last statement in a sequence
-                    if i < len(statements) - 1 and not isinstance(stmt, (Assign, Let, If, While, PrintLn)):
+                    if (i < len(statements) - 1 and 
+                        not isinstance(stmt, (Assign, Let, If, While, PrintLn, TypeDef))):
                         self.emit("POP_TOP")
             
             case _:
@@ -1111,6 +1357,8 @@ class BytecodeVM:
         self.ip = 0  # Instruction pointer
         self.call_stack = []  # For function calls
         self.debug = False  # Debug mode flag
+        # Add user-defined types dictionary
+        self.user_defined_types = {}
         
     def run(self):
         result = None
@@ -1312,9 +1560,16 @@ class BytecodeVM:
                     if not isinstance(dict_obj, dict):
                         raise TypeError(f"Cannot access key in non-dict type {type(dict_obj).__name__}")
                     try:
-                        self.stack.append(dict_obj[key])
+                        # Get the value for this key
+                        value = dict_obj[key]
+                        
+                        # Push the value onto the stack
+                        self.stack.append(value)
+                        
+                        # If this is a nested access, let the next instruction handle it
+                        # The value is already on the stack
                     except KeyError:
-                        raise KeyError(f"Key {key} not found in dictionary")
+                        raise KeyError(f"Key {key} not found in dictionary or object")
 
                 elif opcode == "STORE_DICT_ITEM":
                     value = self.stack.pop()
@@ -1329,7 +1584,55 @@ class BytecodeVM:
                     # Function metadata is already on the stack
                     # Just keep it there (it's a tuple with function info)
                     pass
-
+                    
+                elif opcode == "CREATE_TYPE_DEF":
+                    # Get type definition from arguments
+                    type_name = args[0]
+                    field_count = args[1]
+                    
+                    # Pop field definitions from stack (name, type pairs)
+                    fields = {}
+                    for _ in range(field_count):
+                        field_type = self.stack.pop()  # Type comes second on stack
+                        field_name = self.stack.pop()  # Name comes first on stack
+                        fields[field_name] = field_type
+                    
+                    # Register the type
+                    self.user_defined_types[type_name] = fields
+                    
+                    # Don't push anything onto the stack
+                    # Type definitions don't have a runtime value
+                
+                elif opcode == "CREATE_TYPE_INSTANCE":
+                    # Get type name from arguments
+                    type_name = args[0]
+                    
+                    # Get instance fields from the Dict already on stack
+                    fields_dict = self.stack.pop()
+                    
+                    if type_name not in self.user_defined_types:
+                        raise TypeError(f"Unknown type: {type_name}")
+                    
+                    type_def = self.user_defined_types[type_name]
+                    instance = {}
+                    
+                    # Check for required fields
+                    for field_name in type_def:
+                        if field_name not in fields_dict:
+                            raise TypeError(f"Missing required field '{field_name}' for type {type_name}")
+                    
+                    # Check for extra fields
+                    for field_name in fields_dict:
+                        if field_name not in type_def:
+                            raise TypeError(f"Unknown field '{field_name}' for type {type_name}")
+                    
+                    # Copy the fields to the instance
+                    # We could do type checking here but we'll keep it simple
+                    instance.update(fields_dict)
+                    
+                    # Push instance onto stack
+                    self.stack.append(instance)
+                
                 elif opcode == "CALL_FUNCTION":
                     num_args = args[0]
                     # Pop arguments (we only support 1 arg for now)
@@ -1568,6 +1871,10 @@ def enhanced_compile_node(self, node):
             self._compile_dict_assign(node)
         case Break():
             self._compile_break(node)
+        case TypeDef(name, fields):
+            self._compile_type_def(node)
+        case TypeInstantiation(type_name, fields):
+            self._compile_type_instantiation(node)
         case _:
             original_compile_node(self, node)
 
@@ -1672,8 +1979,8 @@ code3="""
             println(slice[0]);
             println(arr[0]);
             """
-ast = parse(code3)
-print(e(ast))
+# ast = parse(code3)
+# print(e(ast))
 
 
 # def run_test_case(code, expected_output):
@@ -1719,3 +2026,40 @@ print(e(ast))
 #     else:
 #         from tests.unit_tests import run_tests
 #         run_tests()
+
+# Add type definition and instantiation compilation methods to BytecodeCompiler
+def _compile_type_def(self, node):
+    """Compile a type definition"""
+    # Store the type name as a constant
+    type_name = node.name
+    
+    # Push each field name and type onto stack in reverse order
+    # (since we'll pop them in reverse when creating the type)
+    fields = list(node.fields.items())
+    for field_name, field_type in fields:
+        # Add constants for the field name and type
+        name_idx = self.add_constant(field_name)
+        type_idx = self.add_constant(field_type)
+        
+        # Push them onto the stack
+        self.emit("LOAD_CONST", name_idx)
+        self.emit("LOAD_CONST", type_idx)
+    
+    # Create the type definition
+    self.emit("CREATE_TYPE_DEF", type_name, len(fields))
+    
+    # Since type definitions don't push anything onto the stack,
+    # we don't need to pop anything
+    # Remove the POP_TOP instruction
+
+def _compile_type_instantiation(self, node):
+    """Compile a type instantiation"""
+    # First compile the fields dictionary
+    self._compile_node(node.fields)
+    
+    # Then create an instance of the type
+    self.emit("CREATE_TYPE_INSTANCE", node.type_name)
+
+# Assign these methods to the BytecodeCompiler class
+BytecodeCompiler._compile_type_def = _compile_type_def
+BytecodeCompiler._compile_type_instantiation = _compile_type_instantiation

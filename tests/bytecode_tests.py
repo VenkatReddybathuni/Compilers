@@ -3,7 +3,7 @@ import sys
 sys.path.append(str(Path(__file__).parent.parent))
 
 from main import parse, BytecodeCompiler, BytecodeVM
-from test_framework import capture_stdout 
+from tests.test_framework import capture_stdout 
 from io import StringIO
 
 def run_bytecode_test(code, expected_output=None, env=None):
@@ -299,7 +299,31 @@ def test_functions():
     """
     expected6 = "Hello, World!"
     run_bytecode_test(code6, expected6)
+    # TestCase(
+    #         name="Simple User-Defined Type",
+    #         code="""
+    #         type Person { "name": string, "age": int };
+    #         Person p = Person { "name": "Alice", "age": 30 };
+    #         println(p{"name"});
+    #         println(p{"age"});
+    #         """,
+    #         expected_output="Alice\n30"
+    #     ),
 
+    print("Testing function with user-defined type...")
+    code7 = """
+    type Point { "x": int, "y": int };
+    type Circle { "center": Point, "radius": int };
+    
+    Point origin = Point { "x": 0, "y": 0 };
+    Circle c = Circle { "center": Point { "x": 5, "y": 10 }, "radius": 15 };
+    
+    println(c{"center"}{"x"});
+    println(c{"center"}{"y"});
+    println(c{"radius"});
+    """
+    expected7 = "5\n10\n15"
+    run_bytecode_test(code7, expected7)
 # Update the run_tests function to include the new test function
 def run_tests():
     try:
