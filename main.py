@@ -1039,9 +1039,9 @@ def parse(s: str) -> AST:
                             param_type = next(t).v
                         else:
                             raise ParseError("Expected parameter type")
-                        raise ParseError("Expected parameter type")
-                    param_token = next(t)
-                    param_type = param_token.t + "[]" * param_token.array_dimensions if param_token.is_array else param_token.t
+                    else:
+                        param_token = next(t)
+                        param_type = param_token.t + "[]" * param_token.array_dimensions if param_token.is_array else param_token.t
                     
                     params.append((param_name, param_type))
                     
@@ -1060,9 +1060,9 @@ def parse(s: str) -> AST:
                                 param_type = next(t).v
                             else:
                                 raise ParseError("Expected parameter type")
-                            raise ParseError("Expected parameter type")
-                        param_token = next(t)
-                        param_type = param_token.t + "[]" * param_token.array_dimensions if param_token.is_array else param_token.t
+                        else:
+                            param_token = next(t)
+                            param_type = param_token.t + "[]" * param_token.array_dimensions if param_token.is_array else param_token.t
                         
                         params.append((param_name, param_type))
                 
