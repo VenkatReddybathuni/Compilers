@@ -1387,6 +1387,7 @@ def parse(s: str) -> AST:
                                 while isinstance(t.peek(None), OperatorToken) and t.peek().o == '[':
                                     next(t)  # consume [
                                     indices.append(parse_expr())
+                                    next(t)  # consume ]
                                 if isinstance(t.peek(None), OperatorToken) and t.peek().o == '=':
                                     next(t)  # consume =
                                     value = parse_expr()
