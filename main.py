@@ -38,7 +38,7 @@ class Let(AST):
     var: str
     expr: AST
     body: AST
-    var_type: str = None  # Add var_type field with default None
+    var_type: str = None  
 
 @dataclass
 class Sequence(AST):
@@ -46,23 +46,23 @@ class Sequence(AST):
 
 @dataclass
 class Fun(AST):
-    n: str       # name
-    params: list[tuple[str, str]]  # list of (param_name, param_type) tuples
-    rt: str      # return type
-    b: AST       # body
-    e: AST       # expression
+    n: str       
+    params: list[tuple[str, str]]  
+    rt: str      
+    b: AST      
+    e: AST       
 
 @dataclass
 class Call(AST):
-    n: str       # function name
-    args: list   # list of arguments
+    n: str       
+    args: list   
 
 @dataclass
 class Closure(AST):
-    params: list         # list of (param_name, param_type) tuples
-    body: AST           # function body
-    return_type: str    # return type
-    captured_env: list  # captured environment
+    params: list         
+    body: AST           
+    return_type: str    
+    captured_env: list  
 
 @dataclass
 class PrintLn(AST):
@@ -96,12 +96,12 @@ class Array(AST):
 @dataclass
 class ArrayAccess(AST):
     array: AST
-    indices: list[AST]  # Changed from single index to list of indices for multi-dimensional access
+    indices: list[AST]  
 
 @dataclass
 class ArrayAssign(AST):
     array: AST
-    indices: list[AST]  # Changed from single index to list of indices
+    indices: list[AST]  
     value: AST
 
 @dataclass
@@ -129,16 +129,30 @@ class Slice(AST):
     start: AST
     end: AST
 
-
 @dataclass
 class TypeDef(AST):
     name: str
-    fields: dict  # Maps field name to type name
+    fields: dict  
 
 @dataclass
 class TypeInstantiation(AST):
     type_name: str
     fields: Dict
+
+@dataclass
+class ArrayInit(AST):
+    element_type: str
+    sizes: list[AST]  # List of sizes for multidimensional arrays
+
+@dataclass
+class Input(AST):
+    """AST node for input() function that reads a line from console"""
+    prompt: AST = None  # Optional prompt to display
+
+@dataclass
+class ParseInt(AST):
+    """AST node for parseInt() function that converts a string to integer"""
+    expr: AST
 
 class Token:
     pass
@@ -166,8 +180,8 @@ class StringToken(Token):
 @dataclass
 class TypeToken(Token):
     t: str
-    is_array: bool = False  # Add array type flag
-    array_dimensions: int = 0  # Track number of dimensions for nd arrays 
+    is_array: bool = False 
+    array_dimensions: int = 0  
 
 @dataclass
 class TypeDefToken(Token):
@@ -185,7 +199,7 @@ class ArrayToken(Token):
 class TypeCheckError(Exception):
     """An error raised during type checking"""
     message: str
-    node: AST = None  # The AST node that caused the error
+    node: AST = None  
     
     def __str__(self):
         return self.message
@@ -194,10 +208,10 @@ class TypeChecker:
     """A static type checker for our language"""
     
     def __init__(self):
-        self.environment = {}  # Maps variable names to their types
-        self.function_env = {}  # Maps function names to their signatures
-        self.current_function = None  # Current function being checked
-        self.return_type = None  # Expected return type of current function
+        self.environment = {}  
+        self.function_env = {}  
+        self.current_function = None  
+        self.return_type = None  
         self.errors = []
     
     def check(self, ast):
@@ -205,7 +219,6 @@ class TypeChecker:
         self._check_node(ast, scope={})
         
         if self.errors:
-            # Report the first error
             raise self.errors[0]
             
         return True
@@ -223,7 +236,6 @@ class TypeChecker:
                 return "string"
                 
             case Var(name):
-                # Check if variable exists in scope or environment
                 if name in scope:
                     return scope[name]
                 elif name in self.environment:
@@ -236,12 +248,11 @@ class TypeChecker:
                 left_type = self._check_node(left, scope)
                 right_type = self._check_node(right, scope)
                 
-                # Handle string concatenation
                 if op == "++":
                     if left_type != "string" or right_type != "string":
                         self.errors.append(TypeCheckError(
                             f"String concatenation (++) requires string operands, got '{left_type}' and '{right_type}'", node))
-                        return "string"  # Assume string anyway to avoid cascade errors
+                        return "string" 
                     return "string"
                 
                 # Handle comparison operators
@@ -451,6 +462,14 @@ class TypeChecker:
                 # Return element type
                 return array_type[:-2]  # Remove '[]'
                 
+            case ArrayInit(element_type, sizes):
+                size_types = [self._check_node(size, scope) for size in sizes]
+                if not all(size_type == "int" for size_type in size_types):
+                    self.errors.append(TypeCheckError(
+                        f"Array sizes must be integers, got '{size_types}'", sizes))
+                
+                return f"{element_type}{'[]' * len(sizes)}"
+                
             case _:
                 # Default case for other node types
                 return "unknown"
@@ -582,8 +601,8 @@ def e(tree: AST, env=None) -> int | bool | str | list | dict:
             if isinstance(func_obj, Closure):
                 # Handle closure with captured environment
                 params = func_obj.params
-                param_names = [param_name for param_name, _ in params]
-                param_types = [param_type for _, param_type in params]
+                param_names = [param_name for param_name in params]
+                param_types = [param_type for param_type in params]
                 body = func_obj.body
                 return_type = func_obj.return_type
                 
@@ -826,6 +845,54 @@ def e(tree: AST, env=None) -> int | bool | str | list | dict:
         case Closure(params, body, return_type, _):
             # When a closure appears directly in code (not via Fun), capture the current env
             return Closure(params, body, return_type, env.copy())
+            
+        case Input(prompt):
+            # If prompt is provided, evaluate and print it
+            if prompt:
+                prompt_value = e(prompt, env)
+                print(prompt_value, end="", flush=True)
+            # Read a line of input from stdin
+            try:
+                user_input = input()
+                return user_input
+            except EOFError:
+                return ""
+        
+        case ParseInt(expr):
+            # Evaluate the expression to get a string
+            val = e(expr, env)
+            # Check if it's a string
+            if not isinstance(val, str):
+                raise TypeError(f"parseInt argument must be a string, got {type(val).__name__}")
+            # Try to convert to integer
+            try:
+                return int(val)
+            except ValueError:
+                # Return 0 if conversion fails
+                return 0
+        
+        case ArrayInit(element_type, sizes_expr):
+            # Evaluate the sizes expressions
+            sizes = [e(size_expr, env) for size_expr in sizes_expr]
+            
+            if not all(isinstance(size, int) and size >= 0 for size in sizes):
+                raise ValueError(f"Array sizes must be non-negative integers, got {sizes}")
+                
+            # Create multidimensional array with appropriate default values
+            def create_array(dimensions, element_type):
+                if not dimensions:
+                    if element_type == "int":
+                        return 0  # Default value for int
+                    elif element_type == "string":
+                        return ""  # Default value for string
+                    elif element_type == "bool":
+                        return False  # Default value for bool
+                    else:
+                        raise TypeError(f"Unsupported array element type: {element_type}")
+                size = dimensions[0]
+                return [create_array(dimensions[1:], element_type) for _ in range(size)]
+            
+            return create_array(sizes, element_type)
 
 def lex(s: str) -> Iterator[Token]:
     i = 0
@@ -851,7 +918,7 @@ def lex(s: str) -> Iterator[Token]:
                 array_dimensions += 1
                 i += 2
                 
-            if t in {"and", "or", "if", "else", "fun", "return", "println", "str", "while", "continue", "break", "dict", "type"}:  # Added "type"
+            if t in {"and", "or", "if", "else", "fun", "return", "println", "str", "while", "continue", "break", "dict", "type", "new"}:  # Added "new"
                 yield KeywordToken(t)
             elif t in {"int", "float", "string", "void", "bool"}:  # Types are now handled separately
                 yield TypeToken(t, is_array, array_dimensions)
@@ -983,10 +1050,34 @@ def parse(s: str) -> AST:
                     raise ParseError(f"Expected variable name after {typ}")
                 var = next(t).v
                 var_type = f"{typ}{'[]' * array_dimensions}" if is_array else typ
+                
+                # Check if this is a declaration without initialization (if we see a semicolon next)
+                if isinstance(t.peek(None), OperatorToken) and t.peek().o == ';':
+                    next(t)  # Consume the semicolon
+                    raise ParseError(f"Variable declarations must include initialization. Change '{var_type} {var};' to '{var_type} {var} = <value>;'")
+                
                 expect(OperatorToken("="))
                 
                 if is_array:
-                    if isinstance(t.peek(None), VarToken):
+                    if isinstance(t.peek(None), KeywordToken) and t.peek().w == "new":
+                        # Handle array initialization with `new`
+                        next(t)  # consume 'new'
+                        
+                        # Expect the type token (e.g., 'int')
+                        if not isinstance(t.peek(None), TypeToken):
+                            raise ParseError(f"Expected type after 'new' for {var}")
+                        
+                        element_type = next(t).t
+                        
+                        # Parse all dimensions - support multi-dimensional arrays
+                        sizes = []
+                        while isinstance(t.peek(None), OperatorToken) and t.peek().o == "[":
+                            next(t)  # consume '['
+                            sizes.append(parse_expr())
+                            expect(OperatorToken("]"))
+                        
+                        array_expr = ArrayInit(element_type, sizes)
+                    elif isinstance(t.peek(None), VarToken):
                         array_name = next(t).v
                         expect(OperatorToken("["))
                         start = parse_expr()
@@ -997,7 +1088,8 @@ def parse(s: str) -> AST:
                     elif isinstance(t.peek(None), OperatorToken) and t.peek().o == '[':
                         array_expr = parse_atom()
                     else:
-                        raise ParseError(f"Expected array literal or slice after {var}")
+                        # If we reach here, it's an error
+                        raise ParseError(f"Expected array literal, slice, or 'new' after {var}")
                     
                     let_node = Let(var, array_expr, None, var_type)
                     array_expr.parent = let_node
@@ -1218,6 +1310,25 @@ def parse(s: str) -> AST:
             
             # Remove the old case for type instantiation as it will now be handled at the top
             
+            # Add parsing for new array initialization syntax: new type[size]
+            case KeywordToken("new"):
+                next(t)  # consume 'new'
+                
+                # Expect a type token
+                if not isinstance(t.peek(None), TypeToken):
+                    raise ParseError("Expected type after 'new'")
+                
+                element_type = next(t).t
+                
+                # Parse all dimensions - support multi-dimensional arrays
+                sizes = []
+                while isinstance(t.peek(None), OperatorToken) and t.peek().o == "[":
+                    next(t)  # consume '['
+                    sizes.append(parse_expr())
+                    expect(OperatorToken("]"))
+                
+                return ArrayInit(element_type, sizes)
+                
             case _:
                 return parse_expr()
        
@@ -1354,6 +1465,21 @@ def parse(s: str) -> AST:
                 expect(OperatorToken(")"))
                 expect(OperatorToken(";"))  # Always require semicolon
                 return PrintLn(expr)
+            case VarToken("input"):
+                next(t)
+                expect(OperatorToken("("))
+                # Optionally parse a prompt string
+                prompt = None
+                if not isinstance(t.peek(None), OperatorToken) or t.peek().o != ")":
+                    prompt = parse_expr()
+                expect(OperatorToken(")"))
+                return Input(prompt)
+            case VarToken("parseInt"):
+                next(t)
+                expect(OperatorToken("("))
+                expr = parse_expr()
+                expect(OperatorToken(")"))
+                return ParseInt(expr)
             case KeywordToken("str"):
                 next(t)
                 expect(OperatorToken("("))
@@ -2008,7 +2134,7 @@ class BytecodeCompiler:
                     arg_count = call_instr.args[0]
                     
                     # Get function name
-                    var_idx = instr.args[0]
+                    var_idx = instr.args[0]  # Fix: use instr.args[0] instead of args[0]
                     var_name = self._get_var_name(var_idx)
                     
                     # If we have a function definition with this name in our constants
@@ -2410,6 +2536,30 @@ class BytecodeVM:
                         elements.insert(0, self.stack.pop())
                     self.stack.append(elements)
                 
+                elif opcode == "CREATE_ARRAY_INIT":
+                    element_type = args[0]
+                    sizes = self.stack.pop()
+                    
+                    if not all(isinstance(size, int) and size >= 0 for size in sizes):
+                        raise ValueError(f"Array sizes must be non-negative integers, got {sizes}")
+                    
+                    # Create multidimensional array with appropriate default values
+                    def create_array(dimensions, element_type):
+                        if not dimensions:
+                            if element_type == "int":
+                                return 0  # Default value for int
+                            elif element_type == "string":
+                                return ""  # Default value for string
+                            elif element_type == "bool":
+                                return False  # Default value for bool
+                            else:
+                                raise TypeError(f"Unsupported array element type: {element_type}")
+                        size = dimensions[0]
+                        return [create_array(dimensions[1:], element_type) for _ in range(size)]
+                    
+                    array = create_array(sizes, element_type)
+                    self.stack.append(array)
+                
                 elif opcode == "GET_LENGTH":
                     # Pop the object whose length we need to get
                     obj = self.stack.pop()
@@ -2592,6 +2742,32 @@ class BytecodeVM:
                         # Top-level return or end of program
                         self.stack.append(return_value)
                         self.ip = len(self.instructions)  # Exit execution
+                
+                elif opcode == "INPUT":
+                    # Read one line of input from the user
+                    try:
+                        user_input = input()
+                        self.stack.append(user_input)
+                    except EOFError:
+                        self.stack.append("")
+                
+                elif opcode == "PRINT_NO_NEWLINE":
+                    value = self.stack.pop()
+                    print(value, end="", flush=True)
+                    
+                elif opcode == "STR_TO_INT":
+                    value = self.stack.pop()
+                    if not isinstance(value, str):
+                        raise TypeError(f"parseInt argument must be a string, got {type(value).__name__}")
+                    try:
+                        self.stack.append(int(value))
+                    except ValueError:
+                        # If conversion fails, push 0
+                        self.stack.append(0)
+                
+                elif opcode == "STR_CONVERT":
+                    value = self.stack.pop()
+                    self.stack.append(str(value))
                 
                 else:
                     raise ValueError(f"Unknown opcode: {opcode}")
@@ -2810,6 +2986,12 @@ def enhanced_compile_node(self, node):
             self._compile_type_def(node)
         case TypeInstantiation(type_name, fields):
             self._compile_type_instantiation(node)
+        case ArrayInit(element_type, sizes):
+            self._compile_array_init(node)
+        case Input(prompt):
+            self._compile_input(node)
+        case ParseInt(expr):
+            self._compile_parse_int(node)
         case _:
             original_compile_node(self, node)
 
@@ -2940,6 +3122,196 @@ def _compile_type_instantiation(self, node):
     # Then create an instance of the type
     self.emit("CREATE_TYPE_INSTANCE", node.type_name)
 
+def _compile_array_init(self, node):
+    """Compile array initialization"""
+    for size in node.sizes:
+        self._compile_node(size)
+    self.emit("CREATE_ARRAY_INIT", node.element_type)
+
 # Assign these methods to the BytecodeCompiler class
 BytecodeCompiler._compile_type_def = _compile_type_def
 BytecodeCompiler._compile_type_instantiation = _compile_type_instantiation
+BytecodeCompiler._compile_array_init = _compile_array_init
+
+def _compile_input(self, node):
+    """Compile input function call"""
+    # If there's a prompt, compile it first
+    if node.prompt:
+        self._compile_node(node.prompt)
+        self.emit("PRINT_NO_NEWLINE")  # Print without newline
+    
+    # Emit instruction to read input
+    self.emit("INPUT")
+
+# Add this method to BytecodeCompiler
+BytecodeCompiler._compile_input = _compile_input
+
+# Update enhanced_compile_node to use the _compile_input method
+def enhanced_compile_node(self, node):
+    if node is None:
+        return
+    
+    match node:
+        case Array(elements):
+            self._compile_array(node)
+        case ArrayAccess(array, indices):
+            self._compile_array_access(node)
+        case ArrayAssign(array, indices, value):
+            self._compile_array_assign(node)
+        case Length(expr):
+            self._compile_length(node)
+        case Slice(sequence, start, end):
+            self._compile_slice(node)
+        case Fun(n, params, rt, b, e):
+            self._compile_function(node)
+        case Call(n, args):
+            self._compile_call(node)
+        case Return(expr):
+            self._compile_return(node)
+        case Dict(pairs):
+            self._compile_dict(node)
+        case DictAccess(dict, key):
+            self._compile_dict_access(node)
+        case DictAssign(dict, key, value):
+            self._compile_dict_assign(node)
+        case Break():
+            self._compile_break(node)
+        case TypeDef(name, fields):
+            self._compile_type_def(node)
+        case TypeInstantiation(type_name, fields):
+            self._compile_type_instantiation(node)
+        case ArrayInit(element_type, sizes):
+            self._compile_array_init(node)
+        case Input(prompt):
+            self._compile_input(node)
+        case ParseInt(expr):
+            self._compile_parse_int(node)
+        case _:
+            original_compile_node(self, node)
+
+# Update the _compile_node method
+BytecodeCompiler._compile_node = enhanced_compile_node
+
+def _compile_parse_int(self, node):
+    """Compile parseInt function call"""
+    # Compile the string expression first
+    self._compile_node(node.expr)
+    
+    # Emit instruction to convert string to integer
+    self.emit("STR_TO_INT")
+
+# Add this method to BytecodeCompiler
+BytecodeCompiler._compile_parse_int = _compile_parse_int
+
+code = """
+fun extractDigits(s: string) : string {
+    string result = "";
+    int i = 0;
+    while (i < len(s)) {
+        if (s[i] >= "0" and s[i] <= "9") {
+            result = result ++ s[i];
+        };
+        i = i + 1;
+    };
+    return result;
+}
+
+fun stringToInt(s: string) : int {
+    if (len(s) == 0) {
+        return 0;
+    };
+    
+    int result = 0;
+    int i = 0;
+    while (i < len(s)) {
+        result = result * 10;
+        if (s[i] == "0") { 
+            result = result + 0; 
+        }
+        if (s[i] == "1") { result = result + 1; }
+        if (s[i] == "2") { result = result + 2; }
+        if (s[i] == "3") { result = result + 3; }
+        if (s[i] == "4") { result = result + 4; }
+        if (s[i] == "5") { result = result + 5; }
+        if (s[i] == "6") { result = result + 6; }
+        if (s[i] == "7") { result = result + 7; }
+        if (s[i] == "8") { result = result + 8; }
+        if (s[i] == "9") { result = result + 9; }
+        i = i + 1;
+    }
+    return result;
+}
+
+
+string test = "3aw4asdf8";
+string digits = " ";
+digits = extractDigits(test);
+int number = 0;
+number = stringToInt(digits);
+println(number*number);
+"""
+
+ast = parse(code)
+
+e(ast)
+
+
+
+code1 = """
+int[][] grid = new int[3][2];
+println("Empty 2D array with default values:");
+println(grid);
+
+grid[0][0] = 10;
+grid[0][1] = 11;
+grid[1][0] = 20;
+grid[1][1] = 21;
+grid[2][0] = 30;
+grid[2][1] = 31;
+
+println("Filled 2D array:");
+println(grid);
+
+println("grid[1][1] = " ++ str(grid[1][1]));
+
+int[][] matrix = new int[3][3];
+int i = 0;
+while (i < 3) {
+    int j = 0;
+    while (j < 3) {
+        matrix[i][j] = (i+1) * 10 + j;
+        j = j + 1;
+    }
+    i = i + 1;
+}
+
+println("3x3 matrix:");
+println(matrix);
+"""
+
+ast1 = parse(code1)
+e(ast1)
+
+
+# code2 = """
+# string name = input("Enter your name: ");
+# println("Hello, " ++ name);
+
+
+
+# int age = 0;
+# age = parseInt(input("Enter your age: "));
+# println("In 10 years you will be " ++ str(age + 10));
+# """
+# ast2 = parse(code2)
+# e(ast2)
+
+
+
+code4 = """
+    int[] empty = [];
+    println(len(empty));
+    """
+
+ast4 = parse(code4)
+e(ast4)

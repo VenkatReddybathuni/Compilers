@@ -2,7 +2,7 @@
 
 # Enhanced script to run files in our custom language
 # Usage: ./run.sh filename.txt [debug]
-# Note: Type checking is now mandatory for all executions
+# Note: Type checking is optional (disabled by default for now)
 
 COMPILER_DIR="/home/venkat/Desktop/Compilers"
 CODE_FILE="$1"
@@ -10,11 +10,12 @@ RUN_OPTION="$2"
 
 # Check if a file argument was provided
 if [ -z "$CODE_FILE" ]; then
-  echo "Usage: $0 <source_file> [debug]"
+  echo "Usage: $0 <source_file> [debug|typecheck]"
   echo "Example: $0 euler.txt"
   echo "Options:"
   echo "  debug     - Enable VM debugging output"
-  echo "Note: Static type checking is now mandatory for all code execution"
+  echo "  typecheck - Enable static type checking"
+  echo "Note: Type checking is currently disabled by default"
   exit 1
 fi
 
@@ -49,24 +50,30 @@ def run_file(filename, option=None):
         with open(filename, 'r') as f:
             code = f.read()
         
-        print(f"Running {filename} with mandatory type checking...")
+        print(f"Running {filename}...")
         debug_mode = option == "debug"
+        typecheck_mode = option == "typecheck"
         
         if debug_mode:
             print("Debug mode enabled")
         
-        # Parse and compile with mandatory type checking
-        start_time = time()
-        
-        # Always run static type checking
-        try:
-            bytecode = compile_with_static_type_check(code)
-            print("Code type-checked successfully!")
-        except TypeCheckError as e:
-            print(f"Type Error: {e}")
-            return 1
+        if typecheck_mode:
+            print("Type checking enabled")
+            # Run with type checking
+            try:
+                bytecode = compile_with_static_type_check(code)
+                print("Code type-checked successfully!")
+            except TypeCheckError as e:
+                print(f"Type Error: {e}")
+                return 1
+        else:
+            # Skip type checking - just parse and compile
+            ast = parse(code)
+            compiler = BytecodeCompiler()
+            bytecode = compiler.compile(ast)
         
         # Run the program
+        start_time = time()
         vm = BytecodeVM(bytecode)
         
         # Set debugging mode for VM if requested

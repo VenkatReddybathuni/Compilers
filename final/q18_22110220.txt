@@ -1,0 +1,75 @@
+fun findLargestPrimePowerFib(limit: int): int {
+    int a = 1;
+    int b = 1;
+    int largest = 0;
+    int isPrimePower = 0; 
+
+    while (b < limit) {
+        int num = 0;
+        num = b;
+        isPrimePower = 0; 
+
+        if (num > 1) {
+            int factor = 0;
+            int i = 2;
+            while (i * i <= num and factor == 0) {
+                if (num % i == 0) {
+                    factor = i;
+                }
+                i = i + 1;
+            }
+
+            if (factor == 0) {
+                isPrimePower = 1; 
+            } else {
+                int remainder = num;
+                while (remainder % factor == 0) {
+                    remainder = remainder / factor;
+                }
+
+                if (remainder == 1) {
+                    int isPrime = 1; 
+                    if (factor <= 1) {
+                        isPrime = 0; 
+                    } else {
+                        int j = 2;
+                        while (j * j <= factor) {
+                            if (factor % j == 0) {
+                                isPrime = 0; 
+                                break;
+                            }
+                            j = j + 1;
+                        }
+                    }
+                    isPrimePower = isPrime;
+                } else {
+                    isPrimePower = 0; 
+                }
+            }
+        } else {
+             isPrimePower = 0; 
+        }
+
+        if (isPrimePower == 1) {
+            largest = b;
+        }
+
+        int temp = a + b;
+        a = b;
+        b = temp;
+    }
+
+    return largest;
+}
+
+int result1 = 0;
+result1 = findLargestPrimePowerFib(100);
+println("Largest Fibonacci number under 100 that is a prime power: " ++ str(result1));
+
+int result2 = 0;
+result2 = findLargestPrimePowerFib(10000);
+println("Largest Fibonacci number under 10000 that is a prime power: " ++ str(result2));
+
+int result3 = 0;
+result3 = findLargestPrimePowerFib(1000000);
+println("Largest Fibonacci number under 1000000 that is a prime power: " ++ str(result3));

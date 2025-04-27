@@ -2,59 +2,66 @@
 
 ## Core Features
 
+Each feature is carefully designed for type safety and reliability:
+
 ### Control Flow
-* If-then-else expressions with boolean conditions
-* While loops with break/continue statements
-* Function definitions with type annotations and return values
-* Let expressions for variable declarations
-* Return statements
-* Multiple statement blocks with proper scoping
+Comprehensive flow control with strict type checking:
+* If-then-else expressions with boolean conditions - Enables branching logic with strict boolean type checking
+* While loops with break/continue statements - Provides loop control with explicit iteration management 
+* Function definitions with type annotations and return values - Ensures type safety at function boundaries
+* Let expressions for variable declarations - Creates scoped variable bindings with proper initialization
+* Return statements - Explicitly controls function output with type checking
+* Multiple statement blocks with proper scoping - Maintains lexical scoping rules for variables
 
 ### Type System
-* Static type checking at compile time
-* Basic types: `int`, `bool`, `string`
+Complete static type system with compile-time guarantees:
+* Static type checking at compile time - Catches type errors before execution
+* Basic types: `int`, `bool`, `string` - Core primitive types with strict bounds
 * Array types with indexing and slicing: `int[]`, `string[]`, etc.
 * Multi-dimensional arrays: `int[][]`, etc.
 * Dictionary type with string keys: `dict`
 * User-defined types (structs) with field access
 * Type annotations for function parameters and return types
-* Explicit type conversion using `str()`
+* Explicit type conversion using `str()` and `parseInt()` - Safe bidirectional string-integer conversion
+* Array initialization using `new` operator - Type-safe array creation with specified size
 * Strong type checking with no implicit conversions
 
 ### Operations
-* Arithmetic: `+`, `-`, `*`, `/`, `%`, `**` (power)
-* String: `++` (concatenation with strict type checking)
-* Comparison: `<`, `>`, `<=`, `>=`, `==`, `!=`
-* Logical: `and`, `or`
-* Array concatenation using `+` operator
-* Array and string slicing using `[start:end]` syntax
+Type-safe operations with overflow protection:
+* Arithmetic: `+`, `-`, `*`, `/`, `%`, `**` (power) - Protected numeric operations with bounds checking
+* String: `++` (concatenation with strict type checking) - Safe string operations that prevent type confusion
+* Comparison: `<`, `>`, `<=`, `>=`, `==`, `!=` - Type-safe comparison operators 
+* Logical: `and`, `or` - Short-circuit boolean operations
+* Array concatenation using `+` operator - Type-checked array combining
+* Array and string slicing using `[start:end]` syntax - Zero-based indexing with bounds checking
 
 ### Data Structures
+Built-in collections with strong type guarantees:
 * Arrays with indexing, slicing, and length operation
 * Dictionaries with string keys and arbitrary value types
 * User-defined types (structs) with named fields
 * Multi-dimensional arrays
 
 ### Advanced Features
-* First-class functions and closures
-* Function inlining optimization
-* Peephole optimization (constant folding)
-* Bytecode compilation for efficient execution
-* Proper lexical scoping
-* Variable capture in closures
+* First-class functions and closures - Functions can be passed as values and capture their environment
+* Function inlining optimization - Automatically inlines small functions for performance
+* Peephole optimization (constant folding) - Simplifies constant expressions at compile time
+* Bytecode compilation for efficient execution - Translates to compact bytecode for faster execution
+* Proper lexical scoping - Maintains correct variable visibility and shadowing
+* Variable capture in closures - Preserves access to variables from outer scopes
 
 ## User-Defined Functions
 
 Our language provides comprehensive support for user-defined functions, which are a central feature. Functions in our language have:
 
 ### Function Definition and Calling
-
+Functions as first-class values with full type checking:
 Functions are defined using the `fun` keyword, with explicit parameter types and return type:
 
 ```python
-# Basic function definition
+# Basic function definition with strict parameter typing
 fun add(x: int, y: int): int {
-    return x + y;
+    return x + y;  # Type-checked return value
 }
 
 # Calling the function
@@ -63,10 +70,11 @@ println(result);  # Prints 15
 ```
 
 ### Function Return Values
-
+Explicit return types with compile-time verification:
 All functions must have a specified return type and appropriate return statements:
 
 ```python
+# Return type checking ensures type safety
 fun max(a: int, b: int): int {
     if (a > b) {
         return a;
@@ -144,7 +152,13 @@ println(x);        # Prints 1 (global x is unchanged)
 
 ## User-Defined Types
 
-Our language supports custom data types through a struct-like syntax:
+Our language implements a robust type system that supports custom data structures through a struct-like syntax. Key features include:
+- Dictionary-style field access for clean syntax
+- Strong type checking for field assignments
+- Support for nested type definitions
+- First-class type system integration
+- Immutable field names with mutable values
+- Full interoperability with functions and arrays
 
 ### Type Definition and Creation
 
@@ -162,7 +176,11 @@ println(p{"age"});   # Prints 30
 
 ### Field Modification
 
-Fields of user-defined types can be modified:
+The language provides controlled mutability for struct fields:
+- Type-safe field updates
+- Runtime bounds checking
+- Maintains type consistency
+- Prevents undefined field access
 
 ```python
 type Counter { "value": int };
@@ -206,14 +224,33 @@ println("Area: " ++ str(area(r)));  # Prints "Area: 50"
 
 ## Array Operations
 
-The language provides rich support for array manipulation:
+Arrays are first-class citizens with comprehensive features:
+- Zero-based indexing with bounds checking
+- Dynamic size allocation with new operator
+- Static initialization with literals
+- Multi-dimensional support
+- Efficient memory management
+- Built-in length operations
+- Type-safe concatenation and slicing
 
 ### Array Creation and Access
 
 ```python
-# Array creation
+# Static array initialization
 int[] numbers = [1, 2, 3, 4, 5];
-string[] words = ["hello", "world", "!"];
+string[] words = ["hello", "world"];
+
+# Dynamic array initialization using new
+int[] nums = new int[10];          # Creates [0,0,0,0,0,0,0,0,0,0]
+bool[] flags = new bool[5];        # Creates [false,false,false,false,false]
+string[] names = new string[3];    # Creates ["","",""]
+
+# Multi-dimensional array initialization
+int[][] matrix = new int[3][3];    # Creates 3x3 matrix of zeros
+int[][][] cube = new int[2][2][2]; # Creates 2x2x2 3D array of zeros
+
+# Empty array initialization 
+int[] empty = [];
 
 # Array indexing (zero-based)
 println(numbers[0]);  # Prints 1
@@ -255,7 +292,13 @@ println(matrix[0][1]);  # Prints 2
 
 ## String Operations
 
-Comprehensive string manipulation features:
+String handling includes:
+- Immutable string values
+- Efficient concatenation
+- Unicode support
+- Built-in length and indexing
+- Type-safe operations
+- Automatic memory management
 
 ### String Concatenation
 
@@ -290,13 +333,26 @@ string sliced = s[1:5];  # "ello"
 ### String Conversion
 
 ```python
-int num = 42;
-string text = str(num);  # Converts int to string: "42"
+# String to int conversion
+string numStr = "42";
+int num = parseInt(numStr);    # Converts string to int: 42
+string invalid = "abc";
+int result = parseInt(invalid); # Runtime error: Invalid integer format
+
+# Int to string conversion
+int x = 42;
+string text = str(x);         # Converts int to string: "42"
 ```
 
 ## Dictionary Operations
 
-Support for dictionary data structures with string keys:
+Dictionaries provide:
+- String-keyed lookup tables
+- Dynamic size allocation
+- Type-safe value storage
+- Fast key-based access
+- Mutable value storage
+- Runtime key validation
 
 ```python
 # Dictionary creation
@@ -312,6 +368,14 @@ person{"city"} = "New York";
 ```
 
 ## Control Flow
+
+Control structures feature:
+- Short-circuit evaluation
+- Proper block scoping
+- Structured loop control
+- Conditional branching
+- Loop interruption tools
+- Scope-aware variables
 
 ### If-Else Statements
 
@@ -351,6 +415,14 @@ while (i < 10) {
 ```
 
 ## Optimizations
+
+The compiler implements several optimization strategies:
+- Constant expression evaluation
+- Dead code elimination
+- Function inlining for performance
+- Loop optimization
+- Common subexpression elimination
+- Register allocation
 
 ### Function Inlining
 
@@ -417,9 +489,9 @@ To execute programs written in our language, use the `run.sh` script:
 This script compiles your program and runs it, displaying the output in the terminal.
 
 ### Command Line Options
-
+Flexible runtime configuration:
 ```bash
-# Run with bytecode compilation (default)
+# Full compiler pipeline with optimizations
 ./run.sh program.txt
 
 # Run with interpreter only (no bytecode)
@@ -433,6 +505,15 @@ This script compiles your program and runs it, displaying the output in the term
 ```
 
 ## Project Structure
+
+The project is organized for maintainability and clarity:
+- Modular component design
+- Clear separation of concerns
+- Comprehensive test coverage
+- Example-driven documentation
+- Easy-to-use build system
+- Flexible configuration options
+
 ```
 /
 ├── main.py                 # Core language implementation
