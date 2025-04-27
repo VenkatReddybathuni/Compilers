@@ -491,12 +491,9 @@ def check_type(value, expected_type):
         base_type = expected_type.split('[')[0].strip()
         if not isinstance(value, list):
             raise TypeError(f"Type mismatch: expected {expected_type} but got {type(value).__name__}")
-        if base_type == "int":
-            if not all(isinstance(x, int) for x in value):
-                raise TypeError(f"Array elements must be {base_type}")
-        elif base_type == "string":
-            if not all(isinstance(x, str) for x in value):
-                raise TypeError(f"Array elements must be {base_type}")
+        if (base_type == "int" and not all(isinstance(x, int) for x in value)) or \
+           (base_type == "string" and not all(isinstance(x, str) for x in value)):
+            raise TypeError(f"Array elements must be {base_type}")
         return value
     
     # Handle user-defined types
@@ -913,7 +910,7 @@ def parse(s: str) -> AST:
                 break
 
             stmt = parse_stmt()
-            #print(stmt)
+            # print(stmt)
             statements.append(stmt)
 
             # Handle semicolons more carefully
@@ -1011,7 +1008,12 @@ def parse(s: str) -> AST:
                 
                 # Allow any expression, including complex expressions with dictionary lookups
                 expr = parse_expr()
-                expect(OperatorToken(";"))
+                
+                # Check if we have a semicolon after the expression
+                if isinstance(t.peek(None), OperatorToken) and t.peek().o == ';':
+                    next(t)  # Consume the semicolon
+                    
+                # This is the key fix: parse the next statement regardless of semicolon status
                 next_stmt = parse_statements() if t.peek(None) is not None else None
                 return Let(var, expr, next_stmt if next_stmt else Sequence([]))
                 
@@ -1223,7 +1225,7 @@ def parse(s: str) -> AST:
     def parse_expr():
         expr = parse_assign()
         # If the expression is a function call and we're at statement level,
-        # expect a semicolon
+        # expect a semicolon, but don't raise an error if we don't find one
         if isinstance(expr, Call) and isinstance(t.peek(None), OperatorToken) and t.peek().o == ';':
             next(t)
         return expr
@@ -2098,35 +2100,60 @@ class BytecodeCompiler:
                         # Calculate the point where arguments start on the stack
                         # We need to adjust if there are instructions between LOAD_VAR and CALL_FUNCTION
                         arg_start = i + 1
+                        arg_end = j  # Position of CALL_FUNCTION instruction
                         
-                        # Skip all the argument loading instructions
-                        new_instructions = self.instructions[:inline_start]
+                        # Extract function metadata to get parameter information
+                        func_var_idx = instr.args[0]
+                        func_meta = None
                         
-                        # Copy the function body instructions
-                        for k in range(func_info['start_idx'], func_info['end_idx']):
-                            body_instr = self.instructions[k]
+                        # Find the function metadata in constants
+                        for const_idx, const_val in enumerate(self.constants):
+                            if isinstance(const_val, tuple) and len(const_val) >= 3:
+                                # Check if this is our function by looking at the function label
+                                if const_val[0] == func_label:
+                                    func_meta = const_val
+                                    break
+                        
+                        if func_meta:
+                            # Extract parameter names from metadata
+                            params = func_meta[1]  # List of (param_name, param_type) tuples
                             
-                            # Skip parameter loading instructions
-                            if k < func_info['start_idx'] + func_info['param_count']:
-                                continue
+                            # Create a new list of instructions for the inlined function
+                            new_instructions = self.instructions[:inline_start]
+                            
+                            # Collect all argument computation instructions
+                            arg_instructions = self.instructions[arg_start:arg_end]
+                            
+                            # Add all instructions that compute the arguments
+                            new_instructions.extend(arg_instructions)
+                            
+                            # Now store each argument in its corresponding parameter variable
+                            for param_idx, (param_name, _) in enumerate(reversed(params)):
+                                # Make sure parameter is registered in variables dictionary
+                                if param_name not in self.variables:
+                                    self.variables[param_name] = len(self.variables)
                                 
-                            # Convert RETURN_VALUE to just leaving the result on the stack
-                            if body_instr.opcode == "RETURN_VALUE":
-                                # No need to add anything here - value is already on stack
-                                pass
-                            else:
-                                # Add the instruction from function body
-                                new_instructions.append(body_instr)
-                        
-                        # Add instructions after the function call
-                        new_instructions.extend(self.instructions[inline_end:])
-                        
-                        # Update instructions
-                        self.instructions = new_instructions
-                        inlinings_done += 1
-                        
-                        # Start scanning from the beginning of the inlined code
-                        i = inline_start - 1  # Will be incremented to inline_start in next iteration
+                                # Add instruction to store argument value in parameter variable
+                                param_var_idx = self.variables[param_name]
+                                new_instructions.append(BytecodeInstruction("STORE_VAR", [param_var_idx]))
+                            
+                            # Add the function body instructions (excluding parameter stores)
+                            for k in range(func_info['start_idx'] + func_info['param_count'], func_info['end_idx']):
+                                body_instr = self.instructions[k]
+                                
+                                # Skip RETURN_VALUE as the result should just remain on the stack
+                                if body_instr.opcode != "RETURN_VALUE":
+                                    new_instructions.append(body_instr)
+                            
+                            # Add remaining instructions after the function call
+                            new_instructions.extend(self.instructions[inline_end:])
+                            
+                            # Update instructions
+                            self.instructions = new_instructions
+                            inlinings_done += 1
+                            
+                            # Start scanning from the beginning of the inlined code
+                            i = inline_start - 1  # Will be incremented to inline_start in next iteration
             
             i += 1
         
