@@ -2,7 +2,7 @@ from pathlib import Path
 import sys
 sys.path.append(str(Path(__file__).parent.parent))
 
-from test_framework import TestCase, capture_stdout
+from tests.test_framework import TestCase, capture_stdout
 from main import parse, BytecodeCompiler, BytecodeVM
 
 def run_bytecode_euler_test(code, expected_output=None):

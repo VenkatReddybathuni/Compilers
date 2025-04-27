@@ -1,0 +1,106 @@
+fun isSquare(n: int): int {
+    if (n < 0) {
+        return 0;
+    }
+    int root = 0;
+    while (root * root <= n) {
+        if (root * root == n) {
+            return 1;
+        }
+        root = root + 1;
+    }
+    return 0;
+}
+
+fun gcd(a: int, b: int): int {
+    while (b != 0) {
+        int temp = b;
+        b = a % b;
+        a = temp;
+    }
+    return a;
+}
+
+fun largestPrimeFactor(n: int): int {
+    int i = 2;
+    int result = 1;
+    
+    while (i * i <= n) {
+        if (n % i == 0) {
+            while (n % i == 0) {
+                n = n / i;
+            }
+            result = i;
+        }
+        i = i + 1;
+    }
+    
+    if (n > 1) {
+        result = n;
+    }
+    
+    return result;
+}
+
+fun maxPrimeFactor(k: int): int {
+    int maxFactor = 0;
+    int maxSquaredFactor = 0;
+    
+    int limit = 4 * k;
+    
+    int n = 1;
+    while (n <= limit) {
+        int value = 4 * k * n - 1;
+        
+        int sqrtValue = 1;
+        while (sqrtValue * sqrtValue <= value) {
+            if (value % (sqrtValue * sqrtValue) == 0) {
+                int reduced = value / (sqrtValue * sqrtValue);
+                
+                int isPrime = 1;
+                int j = 2;
+                while (j * j <= reduced) {
+                    if (reduced % j == 0) {
+                        isPrime = 0;
+                        break;
+                    }
+                    j = j + 1;
+                }
+                
+                if (isPrime == 1 and reduced > 1) {
+                    if (reduced > maxFactor) {
+                        maxFactor = reduced;
+                        maxSquaredFactor = sqrtValue * sqrtValue * reduced;
+                    }
+                }
+            }
+            sqrtValue = sqrtValue + 1;
+        }
+        
+        n = n + 1;
+    }
+    
+    return maxFactor;
+}
+
+fun solution(N: int): int {
+    int sum = 0;
+    
+    int k = 1;
+    while (k <= N) {
+        int mf = 0;
+        mf = maxPrimeFactor(k);
+        sum = sum + mf;
+        k = k + 1;
+    }
+    
+    return sum;
+}
+
+int result = 0;
+result = solution(10);
+println("Sum for N=10: " ++ str(result));
+
+int finalResult = 0;
+finalResult = solution(100);
+println("Sum for N=100: " ++ str(finalResult));

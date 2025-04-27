@@ -1,0 +1,70 @@
+fun collatzLength(n: int): int {
+    int length = 1;
+    int current = n;
+    
+    while (current != 1) {
+    if (current % 2 == 0) {
+        current = current / 2;
+    } else {
+        if (current > 1000000000) {
+            current = (3 * current + 1) / 2;
+            length = length + 1;
+        } else {
+            current = 3 * current + 1;
+        }
+    }
+    length = length + 1;
+}
+    
+    return length;
+}
+
+fun longestCollatzFib(limit: int): int {
+    int a = 1;
+    int b = 1;
+    int maxLength = 0;
+    int maxFib = 1;
+    
+    int length1 = 0;
+    length1 = collatzLength(1);
+    if (length1 > maxLength) {
+        maxLength = length1;
+        maxFib = 1;
+    }
+    
+    while (b < limit) {
+        int next = a + b;
+        a = b;
+        b = next;
+        
+        if (b >= limit) {
+            break;
+        }
+        
+        int length = 0;
+        length = collatzLength(b);
+        
+        if (length > maxLength) {
+            maxLength = length;
+            maxFib = b;
+        }
+    }
+    
+    return maxFib;
+}
+
+
+int result1 = 0;
+result1 = longestCollatzFib(100);
+println("Fibonacci number under 100 with longest Collatz sequence: " ++ str(result1));
+println("Collatz sequence length: " ++ str(collatzLength(result1)));
+
+int result2 = 0;
+result2 = longestCollatzFib(10000);
+println("Fibonacci number under 10000 with longest Collatz sequence: " ++ str(result2));
+println("Collatz sequence length: " ++ str(collatzLength(result2)));
+
+int result3 = 0;
+result3 = longestCollatzFib(1000000);
+println("Fibonacci number under 1000000 with longest Collatz sequence: " ++ str(result3));
+println("Collatz sequence length: " ++ str(collatzLength(result3)));

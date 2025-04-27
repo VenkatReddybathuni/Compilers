@@ -3,7 +3,7 @@ import sys
 sys.path.append(str(Path(__file__).parent.parent))
 
 from main import parse, BytecodeCompiler, BytecodeVM
-from test_framework import capture_stdout
+from tests.test_framework import capture_stdout
 
 def test_basic_dict():
     print("\n===== Testing Basic Dictionary Operations =====")

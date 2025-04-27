@@ -1,0 +1,45 @@
+fun extractDigits(s: string) : string {
+    string result = "";
+    int i = 0;
+    while (i < len(s)) {
+        if (s[i] >= "0" and s[i] <= "9") {
+            result = result ++ s[i];
+        };
+        i = i + 1;
+    };
+    return result;
+}
+
+fun stringToInt(s: string) : int {
+    if (len(s) == 0) {
+        return 0;
+    };
+    
+    int result = 0;
+    int i = 0;
+    while (i < len(s)) {
+        result = result * 10;
+        if (s[i] == "0") { 
+            result = result + 0; 
+        }
+        if (s[i] == "1") { result = result + 1; }
+        if (s[i] == "2") { result = result + 2; }
+        if (s[i] == "3") { result = result + 3; }
+        if (s[i] == "4") { result = result + 4; }
+        if (s[i] == "5") { result = result + 5; }
+        if (s[i] == "6") { result = result + 6; }
+        if (s[i] == "7") { result = result + 7; }
+        if (s[i] == "8") { result = result + 8; }
+        if (s[i] == "9") { result = result + 9; }
+        i = i + 1;
+    }
+    return result;
+}
+
+
+string test = "3aw4asdf8";
+string digits = " ";
+digits = extractDigits(test);
+int number = 0;
+number = stringToInt(digits);
+println(number*number);
