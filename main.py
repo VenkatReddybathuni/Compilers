@@ -1696,8 +1696,8 @@ class BytecodeCompiler:
         # Second pass: compile with knowledge of globals
         self._compile_node(ast)
         
-        # Third pass: function inlining
-        self._inline_functions()
+        # Third pass: function inlining (commented out but keeping code)
+        # self._inline_functions()
         
         # Fourth pass: peephole optimization
         self._optimize_peephole()
@@ -2538,7 +2538,12 @@ class BytecodeVM:
                 
                 elif opcode == "CREATE_ARRAY_INIT":
                     element_type = args[0]
-                    sizes = self.stack.pop()
+                    num_dimensions = args[1]  # Number of dimensions to pop from stack
+                    
+                    # Pop size values from the stack (in reverse order)
+                    sizes = []
+                    for _ in range(num_dimensions):
+                        sizes.insert(0, self.stack.pop())
                     
                     if not all(isinstance(size, int) and size >= 0 for size in sizes):
                         raise ValueError(f"Array sizes must be non-negative integers, got {sizes}")
@@ -3124,9 +3129,16 @@ def _compile_type_instantiation(self, node):
 
 def _compile_array_init(self, node):
     """Compile array initialization"""
-    for size in node.sizes:
-        self._compile_node(size)
-    self.emit("CREATE_ARRAY_INIT", node.element_type)
+    # Create a list to hold the sizes
+    sizes_list = []
+    
+    # Evaluate each size expression and append to the list
+    for size_expr in node.sizes:
+        self._compile_node(size_expr)
+        sizes_list.append(len(sizes_list))
+    
+    # Create the array with number of dimensions as argument
+    self.emit("CREATE_ARRAY_INIT", node.element_type, len(sizes_list))
 
 # Assign these methods to the BytecodeCompiler class
 BytecodeCompiler._compile_type_def = _compile_type_def

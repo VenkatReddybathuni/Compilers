@@ -464,7 +464,142 @@ def test_multidimensional_arrays():
     expected5 = "0\n1\n2\n3"
     run_bytecode_test(code5, expected5)
 
-# Update the run_tests function to include the dictionary test
+def test_functions():
+    print("\n===== Testing Functions =====")
+    
+    # Basic function definition and call
+    print("Testing basic function call...")
+    code1 = """
+    fun greet(name: string) : string {
+        return "Hello, " ++ name;
+    }
+    
+    println(greet("World"));
+    """
+    expected1 = "Hello, World"
+    run_bytecode_test(code1, expected1)
+    
+    # Function with multiple parameters
+    print("Testing function with multiple parameters...")
+    code2 = """
+    fun add(a: int, b: int) : int {
+        return a + b;
+    }
+    
+    println(add(10, 20));
+    """
+    expected2 = "30"
+    run_bytecode_test(code2, expected2)
+    
+    # Function with multiple returns
+    print("Testing function with conditional returns...")
+    code3 = """
+    fun max(a: int, b: int) : int {
+        if (a > b) {
+            return a;
+        } else {
+            return b;
+        }
+    }
+    
+    println(max(5, 10));
+    println(max(20, 15));
+    """
+    expected3 = "10\n20"
+    run_bytecode_test(code3, expected3)
+    
+    # Function as variable and parameter passing
+    print("Testing function variable scoping...")
+    code4 = """
+    fun compute(a: int, b: int) : int {
+        int x = a * 2;
+        int y = b + 5;
+        return x + y;
+    }
+    
+    int result = compute(3, 4);
+    println(result);
+    """
+    expected4 = "15"
+    run_bytecode_test(code4, expected4)
+
+def test_recursion():
+    print("\n===== Testing Recursion =====")
+    
+    # Simple recursion (factorial)
+    print("Testing simple recursion (factorial)...")
+    code1 = """
+    fun factorial(n: int) : int {
+        if (n <= 1) {
+            return 1;
+        } else {
+            return n * factorial(n - 1);
+        }
+    }
+    
+    println(factorial(5));
+    """
+    expected1 = "120"
+    run_bytecode_test(code1, expected1)
+    
+    # Fibonacci sequence with recursion
+    print("Testing Fibonacci recursion...")
+    code2 = """
+    fun fib(n: int) : int {
+        if (n <= 1) {
+            return n;
+        } else {
+            return fib(n - 1) + fib(n - 2);
+        }
+    }
+    
+    println(fib(7));
+    """
+    expected2 = "13"
+    run_bytecode_test(code2, expected2)
+    
+    # Mutual recursion
+    print("Testing mutual recursion...")
+    code3 = """
+    fun isEven(n: int) : int {
+        if (n == 0) {
+            return 1;
+        } else {
+            return isOdd(n - 1);
+        }
+    }
+    
+    fun isOdd(n: int) : int {
+        if (n == 0) {
+            return 0;
+        } else {
+            return isEven(n - 1);
+        }
+    }
+    
+    println(isEven(4));
+    println(isOdd(4));
+    """
+    expected3 = "1\n0"
+    run_bytecode_test(code3, expected3)
+    
+    # Test closures and captured values
+    # print("Testing closures and variable capture...")
+    # code4 = """
+    # fun createAdder(x: int) : int {
+    #     fun add(y: int) : int {
+    #         return x + y;
+    #     }
+        
+    #     return add(5);
+    # }
+    
+    # println(createAdder(10));
+    # """
+    # expected4 = "15"
+    # run_bytecode_test(code4, expected4)
+
+# Update the run_tests function to include function and recursion tests
 def run_tests():
     try:
         test_arithmetic()
@@ -475,6 +610,8 @@ def run_tests():
         test_arrays()
         test_dictionaries()  
         test_multidimensional_arrays()
+        test_functions()     # Add function tests
+        test_recursion()     # Add recursion tests
         print("\nAll bytecode compilation tests passed!")
     except AssertionError as e:
         print(f"\nTest failed: {e}")
