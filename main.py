@@ -601,8 +601,8 @@ def e(tree: AST, env=None) -> int | bool | str | list | dict:
             if isinstance(func_obj, Closure):
                 # Handle closure with captured environment
                 params = func_obj.params
-                param_names = [param_name for param_name in params]
-                param_types = [param_type for param_type in params]
+                # param_names = [param_name for param_name in params]
+                # param_types = [param_type for param_type in params]
                 body = func_obj.body
                 return_type = func_obj.return_type
                 
@@ -3321,9 +3321,51 @@ e(ast1)
 
 
 code4 = """
-    int[] empty = [];
-    println(len(empty));
-    """
+  fun createAdder(x: int): int {
+            fun add(y: int): int {
+                return x + y;
+            }
+            
+            return add(5);
+        }
+        
+int result = 0;
+result = createAdder(10);
+println(result);
+"""
 
 ast4 = parse(code4)
 e(ast4)
+# code = """
+# fun manOrBoyTest(k: int, x1: int, x2: int, x3: int, x4: int, x5: int): int {
+#     fun A(k: int, x1: int, x2: int, x3: int, x4: int): int {
+#                 if (k <= 0) {
+#                     return x1 + x2;
+#                 }
+#                 return A(k +1, x1 + 1, x1, x2, x3) + A(k + 1, x2 + 1, x1, x2, x3);
+#             }
+#             return A(k, x1, x2, x3, x4);
+#         }
+
+# println(manOrBoyTest(3, 1, 1, 1, 1, 0));
+# """
+# ast = parse(code)
+# result = e(ast)
+
+# code = """
+# int base = 1.6;
+# int exponent = 20;
+# int result = base ** exponent;
+# println(result);
+# """
+
+# # Parse the code to generate an AST
+# ast = parse(code)
+
+# # Compile the AST to bytecode
+# compiler = BytecodeCompiler()
+# bytecode = compiler.compile(ast)
+
+# # Run the bytecode using the VM
+# vm = BytecodeVM(bytecode)
+# vm.run()

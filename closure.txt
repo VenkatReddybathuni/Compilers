@@ -1,29 +1,12 @@
-int[][] grid = new int[3][2];
-println("Empty 2D array with default values:");
-println(grid);
+fun createAdder(x: int): int {
+            fun add(y: int): int {
+                return x + y;
+            }
+            
+            return add(5);
+        }
+        
+int result = 0;
+result = createAdder(10);
+println(result);
 
-grid[0][0] = 10;
-grid[0][1] = 11;
-grid[1][0] = 20;
-grid[1][1] = 21;
-grid[2][0] = 30;
-grid[2][1] = 31;
-
-println("Filled 2D array:");
-println(grid);
-
-println("grid[1][1] = " ++ str(grid[1][1]));
-
-int[][] matrix = new int[3][3];
-int i = 0;
-while (i < 3) {
-    int j = 0;
-    while (j < 3) {
-        matrix[i][j] = (i+1) * 10 + j;
-        j = j + 1;
-    }
-    i = i + 1;
-}
-
-println("3x3 matrix:");
-println(matrix);

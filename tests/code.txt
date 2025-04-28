@@ -1,0 +1,21 @@
+fun countVowels(input: string) : int {
+    int count = 0;
+    int i = 0;
+    while (i < len(input)) {
+        if (input[i] == "a" or input[i] == "e" or input[i] == "i" or 
+            input[i] == "o" or input[i] == "u" or input[i] == "A" or 
+            input[i] == "E" or input[i] == "I" or input[i] == "O" or 
+            input[i] == "U") {
+            count = count + 1;
+        }
+        i = i + 1;
+    }
+    return count;
+}
+
+string[] words = ["hello", "world", "programming", "test"];
+int i = 0;
+while (i < len(words)) {
+    println(words[i] ++ ": " ++ str(countVowels(words[i])));
+    i = i + 1;
+}

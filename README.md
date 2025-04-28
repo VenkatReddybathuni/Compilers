@@ -1,80 +1,86 @@
-# Typed Programming Language Implementation
+# Lucent Programming Language Implementation
 
-## Core Features
+## Introduction
+Welcome to Lucent, a modern programming language designed to be both lucid and fluent. Lucent combines strong type safety with an intuitive syntax, making it ideal for developers of all experience levels. This guide will help you get started with Lucent and explore its powerful features.
 
-Each feature is carefully designed for type safety and reliability:
+### Writing Your First Program
+Create a new file, `hello_world.txt`, and add the following code:
+```python
+println("Hello, World!");
+```
+Run the program using the following command:
+```bash
+./run.sh hello_world.txt
+```
+You should see the output:
+```
+Hello, World!
+```
 
-### Control Flow
-Comprehensive flow control with strict type checking:
-* If-then-else expressions with boolean conditions - Enables branching logic with strict boolean type checking
-* While loops with break/continue statements - Provides loop control with explicit iteration management 
-* Function definitions with type annotations and return values - Ensures type safety at function boundaries
-* Let expressions for variable declarations - Creates scoped variable bindings with proper initialization
-* Return statements - Explicitly controls function output with type checking
-* Multiple statement blocks with proper scoping - Maintains lexical scoping rules for variables
+### Key Features
+Lucent is designed to be user-friendly and powerful. Here are some of its core features:
 
-### Type System
-Complete static type system with compile-time guarantees:
-* Static type checking at compile time - Catches type errors before execution
-* Basic types: `int`, `bool`, `string` - Core primitive types with strict bounds
+#### Control Flow
+Lucent provides comprehensive flow control with strict type checking:
+* If-then-else expressions with boolean conditions
+* While loops with break/continue statements
+* Function definitions with type annotations and return values
+* Let expressions for variable declarations
+* Return statements for explicit function output
+* Multiple statement blocks with proper scoping
+
+#### Type System
+Lucent's static type system ensures compile-time guarantees:
+* Basic types: `int`, `bool`, `string`
 * Array types with indexing and slicing: `int[]`, `string[]`, etc.
 * Multi-dimensional arrays: `int[][]`, etc.
 * Dictionary type with string keys: `dict`
 * User-defined types (structs) with field access
 * Type annotations for function parameters and return types
-* Explicit type conversion using `str()` and `parseInt()` - Safe bidirectional string-integer conversion
-* Array initialization using `new` operator - Type-safe array creation with specified size
-* Strong type checking with no implicit conversions
+* Explicit type conversion using `str()` and `parseInt()`
+* Array initialization using `new` operator
 
-### Operations
-Type-safe operations with overflow protection:
-* Arithmetic: `+`, `-`, `*`, `/`, `%`, `**` (power) - Protected numeric operations with bounds checking
-* String: `++` (concatenation with strict type checking) - Safe string operations that prevent type confusion
-* Comparison: `<`, `>`, `<=`, `>=`, `==`, `!=` - Type-safe comparison operators 
-* Logical: `and`, `or` - Short-circuit boolean operations
-* Array concatenation using `+` operator - Type-checked array combining
-* Array and string slicing using `[start:end]` syntax - Zero-based indexing with bounds checking
+#### Operations
+Lucent supports type-safe operations with overflow protection:
+* Arithmetic: `+`, `-`, `*`, `/`, `%`, `**` (power)
+* String: `++` (concatenation with strict type checking)
+* Comparison: `<`, `>`, `<=`, `>=`, `==`, `!=`
+* Logical: `and`, `or`
+* Array concatenation using `+` operator
+* Array and string slicing using `[start:end]` syntax
 
-### Data Structures
-Built-in collections with strong type guarantees:
+#### Data Structures
+Lucent includes built-in collections with strong type guarantees:
 * Arrays with indexing, slicing, and length operation
 * Dictionaries with string keys and arbitrary value types
 * User-defined types (structs) with named fields
 * Multi-dimensional arrays
 
-### Advanced Features
-* First-class functions and closures - Functions can be passed as values and capture their environment
-* Function inlining optimization - Automatically inlines small functions for performance
-* Peephole optimization (constant folding) - Simplifies constant expressions at compile time
-* Bytecode compilation for efficient execution - Translates to compact bytecode for faster execution
-* Proper lexical scoping - Maintains correct variable visibility and shadowing
-* Variable capture in closures - Preserves access to variables from outer scopes
+#### Advanced Features
+* First-class functions and closures
+* Function inlining optimization
+* Peephole optimization (constant folding)
+* Bytecode compilation for efficient execution
+* Proper lexical scoping
+* Variable capture in closures
 
 ## User-Defined Functions
-
-Our language provides comprehensive support for user-defined functions, which are a central feature. Functions in our language have:
+Lucent provides comprehensive support for user-defined functions, which are a central feature. Functions in Lucent have:
 
 ### Function Definition and Calling
-Functions as first-class values with full type checking:
 Functions are defined using the `fun` keyword, with explicit parameter types and return type:
-
 ```python
-# Basic function definition with strict parameter typing
 fun add(x: int, y: int): int {
     return x + y;  # Type-checked return value
 }
 
-# Calling the function
 int result = add(5, 10);
 println(result);  # Prints 15
 ```
 
 ### Function Return Values
 Explicit return types with compile-time verification:
-All functions must have a specified return type and appropriate return statements:
-
 ```python
-# Return type checking ensures type safety
 fun max(a: int, b: int): int {
     if (a > b) {
         return a;
@@ -85,9 +91,7 @@ fun max(a: int, b: int): int {
 ```
 
 ### Recursive Functions
-
-The language fully supports recursive function calls:
-
+Lucent fully supports recursive function calls:
 ```python
 fun factorial(n: int): int {
     if (n <= 1) {
@@ -101,9 +105,7 @@ println(factorial(5));  # Prints 120
 ```
 
 ### Functions with Arrays
-
 Functions can take arrays as parameters and return arrays:
-
 ```python
 fun sumArray(arr: int[]): int {
     int sum = 0;
@@ -120,26 +122,20 @@ println(sumArray(numbers));  # Prints 15
 ```
 
 ### Function Closures
-
-The language supports closures, allowing functions to capture variables from their outer scope:
-
+Lucent supports closures, allowing functions to capture variables from their outer scope:
 ```python
-fun makeAdder(x: int): (int) -> int {
-    # x is captured in the closure
+fun makeAdder(x: int): int {
     fun add(y: int): int {
-        return x + y;  # x is from outer function
+        return x + y;  # x is captured from outer function
     }
-    return add;
+    return add(10);  # Returns x + 10
 }
 
-var addFive = makeAdder(5);
-println(addFive(10));  # Prints 15
+println(makeAdder(5));  # Prints 15
 ```
 
 ### Proper Variable Scoping
-
 Functions create their own scope, and parameters are local to the function:
-
 ```python
 int x = 1;
 fun foo(x: int): int {
